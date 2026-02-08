@@ -116,7 +116,6 @@ export default class BrowserServer {
     this.browser = null
     this.context = null
     this.page = null
-    console.log('[BrowserServer] Stopped')
   }
 
   /**

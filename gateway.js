@@ -17,7 +17,9 @@ class Gateway {
     this.sessionManager = new SessionManager()
     this.agentRunner = new AgentRunner(this.sessionManager, {
       allowedTools: config.agent?.allowedTools || ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
-      maxTurns: config.agent?.maxTurns || 50
+      maxTurns: config.agent?.maxTurns || 50,
+      provider: config.agent?.provider || 'claude',
+      opencode: config.agent?.opencode || {}
     })
     this.commandHandler = new CommandHandler(this)
     this.adapters = new Map()
@@ -59,6 +61,7 @@ class Gateway {
         }
       }
     }
+
   }
 
   setupQueueMonitoring() {

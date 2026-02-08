@@ -10,6 +10,7 @@ export default class AgentRunner extends EventEmitter {
     super()
     this.sessionManager = sessionManager
     this.agent = new ClaudeAgent(config)
+    this.providerName = this.agent.providerName
     this.queues = new Map() // sessionKey -> { items: [], processing: boolean }
     this.globalStats = {
       totalQueued: 0,

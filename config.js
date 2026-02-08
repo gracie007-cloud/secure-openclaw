@@ -35,8 +35,15 @@ export default {
   // Agent configuration
   agent: {
     workspace: '~/clawd',        // Agent workspace directory
-    maxTurns: 50,                // Max tool-use turns per message
-    allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep']
+    maxTurns: 100,                // Max tool-use turns per message
+    allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
+    provider: 'opencode',          // 'claude' or 'opencode'
+    opencode: {
+      model: 'opencode/big-pickle',
+      hostname: '127.0.0.1',
+      port: 4096,
+      useExistingServer: true
+    }
   },
 
   browser: {

@@ -1,13 +1,13 @@
-import { query } from '@anthropic-ai/claude-agent-sdk'
 import { EventEmitter } from 'events'
 import MemoryManager from '../memory/manager.js'
 import { createCronMcpServer, setContext as setCronContext, getScheduler } from '../tools/cron.js'
 import { createGatewayMcpServer, setGatewayContext } from '../tools/gateway.js'
+import { getProvider } from '../providers/index.js'
 
 /**
  * Build the system prompt with memory system info
  */
-function buildSystemPrompt(memoryContext, sessionInfo, cronInfo) {
+function buildSystemPrompt(memoryContext, sessionInfo, cronInfo, providerName = 'claude') {
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -159,6 +159,31 @@ When the user says things like "can I text you on WhatsApp?" or "I'm going outsi
   \`cd ~/Desktop/santa-wrapped/open-claude-cowork/clawd && npm start > /tmp/clawd.log 2>&1 &\`
 - After starting, confirm: "Gateway started! You can message me on WhatsApp now."
 - The gateway will show a QR code in the logs if WhatsApp needs to be connected - tell the user to check /tmp/clawd.log if needed
+${providerName === 'opencode' ? `
+## Composio Integrations — IMPORTANT
+
+You have access to 500+ app integrations via Composio MCP tools. These are available as remote MCP tools and you SHOULD actively use them.
+
+### How to Use
+- Composio tools are available as MCP tools prefixed with the app name (e.g., gmail, slack, github, google_sheets, etc.)
+- To find available tools, look for MCP tools related to the app you need
+- ALWAYS prefer Composio tools over browser automation for app tasks
+
+### Common Integrations
+- **Email**: Gmail — send, read, search emails, manage labels
+- **Messaging**: Slack — send messages, read channels, manage threads
+- **Code**: GitHub — repos, issues, PRs, commits, actions
+- **Docs**: Google Docs, Notion — create, read, edit documents
+- **Sheets**: Google Sheets — read, write, update spreadsheets
+- **Calendar**: Google Calendar — create, list, update events
+- **Tasks**: Trello, Jira, Linear — manage boards, tickets, projects
+- **Storage**: Google Drive, Dropbox — upload, download, manage files
+
+### When a User Asks You To Do Something
+1. First check if a Composio tool exists for the task (email, messaging, code, docs, etc.)
+2. Use the Composio tool directly — do NOT ask the user to do it manually
+3. Only fall back to browser tools if no Composio integration exists for that specific task
+` : ''}
 `
 }
 
@@ -176,6 +201,15 @@ export default class ClaudeAgent extends EventEmitter {
     this.gateway = null // Set by gateway after construction
     this.sessions = new Map()
     this.abortControllers = new Map()
+
+    // Provider setup
+    this.providerName = config.provider || 'claude'
+    this.provider = getProvider(this.providerName, {
+      allowedTools: config.allowedTools,
+      maxTurns: config.maxTurns,
+      permissionMode: config.permissionMode,
+      ...(config.opencode || {})
+    })
 
     this.allowedTools = config.allowedTools || [
       'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
@@ -221,14 +255,8 @@ export default class ClaudeAgent extends EventEmitter {
   }
 
   abort(sessionKey) {
-    const controller = this.abortControllers.get(sessionKey)
-    if (controller) {
-      console.log('[ClaudeAgent] Aborting query for:', sessionKey)
-      controller.abort()
-      this.abortControllers.delete(sessionKey)
-      return true
-    }
-    return false
+    // Delegate abort to the provider
+    return this.provider.abort(sessionKey)
   }
 
   getCronSummary() {
@@ -303,32 +331,16 @@ export default class ClaudeAgent extends EventEmitter {
     // Build system prompt
     const memoryContext = this.memoryManager.getMemoryContext()
     const cronInfo = this.getCronSummary()
-    const systemPrompt = buildSystemPrompt(memoryContext, { sessionKey, platform }, cronInfo)
+    const systemPrompt = buildSystemPrompt(memoryContext, { sessionKey, platform }, cronInfo, this.providerName)
 
     // Combine all allowed tools
     const allAllowedTools = [...this.allowedTools, ...this.cronTools, ...this.gatewayTools]
 
-    // Build query options
-    const queryOptions = {
-      allowedTools: allAllowedTools,
-      maxTurns: this.maxTurns,
-      permissionMode: this.permissionMode,
-      systemPrompt,
-      includePartialMessages: true,
-      mcpServers: {
-        cron: this.cronMcpServer,
-        gateway: this.gatewayMcpServer,
-        ...mcpServers
-      }
+    const allMcpServers = {
+      cron: this.cronMcpServer,
+      gateway: this.gatewayMcpServer,
+      ...mcpServers
     }
-
-    // Resume session if exists
-    if (session.sdkSessionId) {
-      queryOptions.resume = session.sdkSessionId
-    }
-
-    const abortController = new AbortController()
-    this.abortControllers.set(sessionKey, abortController)
 
     if (image) console.log('[ClaudeAgent] With image attachment')
 
@@ -338,23 +350,16 @@ export default class ClaudeAgent extends EventEmitter {
       let fullText = ''
       let hasStreamedContent = false
 
-      // Use streaming input for MCP compatibility
-      for await (const chunk of query({
+      // Delegate to provider - pass prompt and all options
+      for await (const chunk of this.provider.query({
         prompt: this.generateMessages(message, image),
-        options: queryOptions,
-        abortSignal: abortController.signal
+        chatId: sessionKey,
+        mcpServers: allMcpServers,
+        allowedTools: allAllowedTools,
+        maxTurns: this.maxTurns,
+        systemPrompt,
+        permissionMode: this.permissionMode
       })) {
-        // Capture session ID (only on first assignment)
-        if (chunk.type === 'system' && chunk.subtype === 'init') {
-          const newSessionId = chunk.session_id || chunk.data?.session_id
-          if (newSessionId && !session.sdkSessionId) {
-            session.sdkSessionId = newSessionId
-          } else if (newSessionId) {
-            session.sdkSessionId = newSessionId
-          }
-          continue
-        }
-
         // Handle streaming partial messages (token-level streaming)
         if (chunk.type === 'stream_event' && chunk.event) {
           const event = chunk.event
@@ -365,7 +370,7 @@ export default class ClaudeAgent extends EventEmitter {
             const text = event.delta.text
             if (text) {
               fullText += text
-              yield { type: 'text', content: text }
+              yield { type: 'text', content: text, isReasoning: !!event.isReasoning }
               this.emit('run:text', { sessionKey, content: text })
             }
           }
@@ -374,7 +379,7 @@ export default class ClaudeAgent extends EventEmitter {
             yield {
               type: 'tool_use',
               name: event.content_block.name,
-              input: {},
+              input: event.content_block.input || {},
               id: event.content_block.id
             }
             this.emit('run:tool', { sessionKey, name: event.content_block.name })
@@ -383,16 +388,13 @@ export default class ClaudeAgent extends EventEmitter {
         }
 
         // Handle complete assistant messages (only if we haven't streamed content)
-        // Skip text blocks since they were already streamed via stream_event
         if (chunk.type === 'assistant' && chunk.message?.content) {
           for (const block of chunk.message.content) {
-            // Only yield text if we haven't been streaming
             if (block.type === 'text' && block.text && !hasStreamedContent) {
               fullText += block.text
               yield { type: 'text', content: block.text }
               this.emit('run:text', { sessionKey, content: block.text })
             } else if (block.type === 'tool_use') {
-              // Tool use with full input (stream_event only has partial)
               if (!hasStreamedContent) {
                 yield { type: 'tool_use', name: block.name, input: block.input, id: block.id }
                 this.emit('run:tool', { sessionKey, name: block.name })
@@ -408,6 +410,22 @@ export default class ClaudeAgent extends EventEmitter {
           continue
         }
 
+        // Handle done/aborted/error from provider
+        if (chunk.type === 'done') {
+          break
+        }
+        if (chunk.type === 'aborted') {
+          // silently handle abort
+          yield { type: 'aborted' }
+          this.emit('run:aborted', { sessionKey })
+          return
+        }
+        if (chunk.type === 'error') {
+          yield { type: 'error', error: chunk.error }
+          this.emit('run:error', { sessionKey, error: chunk.error })
+          return
+        }
+
         if (chunk.type !== 'system') {
           yield chunk
         }
@@ -418,7 +436,7 @@ export default class ClaudeAgent extends EventEmitter {
 
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.log('[ClaudeAgent] Aborted:', sessionKey)
+        // silently handle abort
         yield { type: 'aborted' }
         this.emit('run:aborted', { sessionKey })
       } else {
@@ -427,8 +445,6 @@ export default class ClaudeAgent extends EventEmitter {
         this.emit('run:error', { sessionKey, error })
         throw error
       }
-    } finally {
-      this.abortControllers.delete(sessionKey)
     }
   }
 
