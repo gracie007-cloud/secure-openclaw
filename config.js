@@ -52,7 +52,7 @@ export default {
     mode: 'clawd',
     clawd: {
       userDataDir: '~/.clawd-browser-profile',
-      headless: false
+      headless: process.env.CI === 'true' || process.env.RAILWAY_ENVIRONMENT_ID ? true : false
     },
     chrome: {
       profilePath: '',
