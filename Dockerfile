@@ -13,12 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package*.json ./
 RUN npm install --production
 
-# Install provider CLIs
-RUN curl -fsSL https://claude.ai/install.sh | bash \
-    && curl -fsSL https://opencode.ai/install | bash
+# Install Opencode CLI
+RUN curl -fsSL https://opencode.ai/install | bash
 
 # Add CLI binary locations to PATH
-ENV PATH="/root/.claude/local/bin:/root/.opencode/bin:/root/.local/bin:${PATH}"
+ENV PATH="/root/.opencode/bin:/root/.local/bin:${PATH}"
 
 COPY . .
 
