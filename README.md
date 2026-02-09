@@ -1,163 +1,281 @@
-# Secure Clawd
+# Secure OpenClaw
 
 A personal AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, browser automation, and integrations with 500+ apps.
+
+---
 
 ## Table of Contents
 
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Deploying Remotely](#deploying-remotely)
+- [Providers](#providers)
 - [Configuration](#configuration)
 - [Messaging Platforms](#messaging-platforms)
-  - [WhatsApp](#whatsapp)
-  - [Telegram](#telegram)
-  - [Signal](#signal)
-  - [iMessage](#imessage)
+- [Tool Approvals](#tool-approvals)
 - [Browser Control](#browser-control)
-  - [Clawd Mode](#clawd-mode-isolated-browser)
-  - [Chrome Mode](#chrome-mode-your-existing-browser)
 - [Memory System](#memory-system)
 - [Scheduling and Reminders](#scheduling-and-reminders)
-- [App Integrations](#app-integrations-composio)
+- [App Integrations](#app-integrations)
 - [Commands](#commands)
-  - [CLI Commands](#cli-commands)
-  - [Chat Commands](#chat-commands)
 - [Troubleshooting](#troubleshooting)
+- [Directory Structure](#directory-structure)
 
 ---
 
 ## Requirements
 
-- Node.js 18 or higher
+- Node.js 18+
 - macOS, Linux, or Windows
-- An Anthropic API key (set as `ANTHROPIC_API_KEY` environment variable)
-- A Composio API key (set as `COMPOSIO_API_KEY` environment variable)
+- Anthropic API key (`ANTHROPIC_API_KEY`)
+- Composio API key (`COMPOSIO_API_KEY`)
+- **Claude Code** — required if using the Claude provider
+- **Opencode** — required if using the Opencode provider
 
-For specific adapters:
-- WhatsApp: A phone with WhatsApp installed
-- Telegram: A bot token from @BotFather
+Platform-specific:
+- WhatsApp: a phone with WhatsApp installed
+- Telegram: a bot token from @BotFather
 - Signal: signal-cli installed and registered
-- iMessage: macOS with Messages.app signed in, plus the `imsg` CLI tool
+- iMessage: macOS only, requires the `imsg` CLI tool
 
 ---
 
 ## Installation
 
+### 1. Clone and install dependencies
+
 ```bash
-cd clawd
+git clone <repo-url> secure-openclaw
+cd secure-openclaw
 npm install
 ```
 
-### API Keys
+### 2. Install a provider
 
-You need two API keys: one from Anthropic and one from Composio.
+You need at least one AI provider installed on the machine.
 
-**Anthropic API Key:**
+**Claude Code** (for the Claude provider):
 
-Get your API key from https://console.anthropic.com/
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+**Opencode** (for the Opencode provider):
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+```
+
+You can install both. The CLI lets you switch between them.
+
+After installing Claude Code, authenticate it locally:
+
+```bash
+claude
+# Follow the OAuth prompts to log in with your Anthropic account
+```
+
+On remote/Docker deployments, authentication is handled by the `ANTHROPIC_API_KEY` environment variable instead — no interactive login needed.
+
+### 3. API keys
+
+**Anthropic** — get your key from https://console.anthropic.com/
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-**Composio API Key:**
-
-Composio provides the app integrations (Gmail, Slack, GitHub, etc.). You need to install the Composio CLI and log in to get your API key.
-
-1. Install the Composio CLI:
+**Composio** — provides 500+ app integrations (Gmail, Slack, GitHub, etc.)
 
 ```bash
 curl -fsSL https://composio.dev/install | bash
-```
-
-2. Log in (this opens your browser):
-
-```bash
 composio login
+composio whoami   # shows your API key
+export COMPOSIO_API_KEY=your-key
 ```
 
-3. Get your API key:
-
-```bash
-composio whoami
-```
-
-Look for the line showing `API Key: ...` and copy it.
-
-4. Set the environment variable:
-
-```bash
-export COMPOSIO_API_KEY=your-api-key-here
-```
-
-**Making Keys Permanent:**
-
-Add both exports to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`):
-
-```bash
-echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
-echo 'export COMPOSIO_API_KEY=...' >> ~/.zshrc
-source ~/.zshrc
-```
+Add all exports to your shell profile (`~/.zshrc` or `~/.bashrc`) to make them permanent.
 
 ---
 
 ## Quick Start
 
-Run the CLI:
-
 ```bash
 node cli.js
 ```
 
-You will see a menu:
+This opens the interactive menu:
 
 ```
-What would you like to do?
-
-  1) Terminal chat
-  2) Start gateway
-  3) Setup adapters
-  4) Configure browser
-  5) Show current config
-  6) Test connection
-  7) Exit
+1) Terminal chat      — talk to the assistant in your terminal
+2) Start gateway      — run the messaging gateway
+3) Setup adapters     — configure WhatsApp, Telegram, etc.
+4) Configure browser  — set up browser automation
+5) Show current config
+6) Test connection
+7) Change provider
+8) Exit
 ```
 
-**Terminal chat** lets you test the assistant directly in your terminal before connecting any messaging platforms.
+Or run directly:
 
-**Start gateway** runs the full system, connecting to all enabled messaging platforms and listening for messages.
+```bash
+node cli.js chat     # terminal chat
+node cli.js start    # start the gateway
+```
+
+---
+
+## Deploying Remotely
+
+The gateway can run on a remote server. Terminal chat is local only.
+
+The remote machine needs the same prerequisites: Node.js 18+, Claude Code or Opencode installed, and the relevant API keys.
+
+### Railway (Easiest)
+
+Railway auto-detects the included `Dockerfile`, builds, and runs.
+
+1. Push your repo to GitHub
+2. Go to [railway.app](https://railway.app), sign in with GitHub
+3. New Project > Deploy from GitHub repo
+4. Add environment variables:
+   - `ANTHROPIC_API_KEY`
+   - `COMPOSIO_API_KEY`
+   - `TELEGRAM_BOT_TOKEN` (if using Telegram)
+   - `WHATSAPP_ALLOWED_DMS`, `WHATSAPP_ALLOWED_GROUPS`, etc.
+5. Add a persistent volume mounted at `/app/auth_whatsapp` (for WhatsApp session)
+6. Add a persistent volume mounted at `/root/clawd` (for memory)
+7. Deploy
+
+WhatsApp requires QR code auth on first boot. Check Railway's log panel for the QR code, scan it from your phone. The session persists via the volume.
+
+Telegram works immediately — no QR needed, just the bot token.
+
+Railway free tier: 500 hours/month. After that, roughly $5/month.
+
+The Dockerfile installs both Claude Code and Opencode, so either provider works out of the box. No interactive CLI login is needed — Claude Code authenticates via the `ANTHROPIC_API_KEY` environment variable, and Opencode authenticates via the model provider's API key (e.g. `OPENAI_API_KEY`).
+
+### Docker
+
+```bash
+docker build -t openclaw .
+docker run -d \
+  --name openclaw \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e COMPOSIO_API_KEY=... \
+  -e TELEGRAM_BOT_TOKEN=... \
+  -v openclaw-wa:/app/auth_whatsapp \
+  -v openclaw-memory:/root/clawd \
+  openclaw
+```
+
+### VPS (Manual)
+
+Any Linux VPS (Hetzner, DigitalOcean, AWS EC2):
+
+```bash
+ssh your-server
+git clone <repo-url> secure-openclaw
+cd secure-openclaw
+npm install
+
+# Install provider
+npm install -g @anthropic-ai/claude-code
+
+# Set env vars
+export ANTHROPIC_API_KEY=sk-ant-...
+export COMPOSIO_API_KEY=...
+
+# Run with a process manager
+npm install -g pm2
+pm2 start gateway.js --name openclaw
+pm2 save
+pm2 startup
+```
+
+### What Runs Where
+
+| Feature | Local | Remote |
+|---------|-------|--------|
+| Terminal chat | Yes | No |
+| Gateway (WhatsApp, Telegram, etc.) | Yes | Yes |
+| Browser automation | Yes | Headless only |
+| Memory | Yes | Yes (needs volume) |
+| Cron/reminders | Yes | Yes |
+| Composio integrations | Yes | Yes |
+
+---
+
+## Providers
+
+Secure OpenClaw supports two AI providers:
+
+**Claude Agent SDK** — Anthropic's SDK. Uses your `ANTHROPIC_API_KEY`. Requires Claude Code installed. Models: Opus 4.6, Sonnet 4.5, Haiku 4.5.
+
+**Opencode** — open-source alternative. Requires Opencode installed. Runs a local server or connects to an existing one. Models: GPT-5 Nano, Big Pickle, GLM-4.7, Grok Code, MiniMax M2.1.
+
+Switch providers from the CLI menu (option 7) or in `config.js`:
+
+```javascript
+agent: {
+  provider: 'claude',    // or 'opencode'
+}
+```
+
+When using Opencode, the provider auto-detects whether a server is already running on the configured port. If one exists, it connects. If not, it starts one.
+
+Use `/model` during terminal chat to switch models within the active provider.
 
 ---
 
 ## Configuration
 
-All settings are in `config.js`. You can edit this file directly or use the setup wizard (`node cli.js` then select option 3 for adapters or option 4 for browser).
-
-The configuration includes:
+All settings live in `config.js`. Edit directly or use the setup wizard.
 
 ```javascript
 {
-  agentId: 'clawd',              // Unique identifier for your assistant
+  agentId: 'clawd',
 
-  whatsapp: { enabled: true, ... },
+  whatsapp: { enabled: true, allowedDMs: [...], allowedGroups: [...] },
   telegram: { enabled: false, token: '', ... },
-  signal: { enabled: false, phoneNumber: '', ... },
+  signal:   { enabled: false, phoneNumber: '', ... },
   imessage: { enabled: false, ... },
 
   agent: {
-    workspace: '~/clawd',        // Where memory and files are stored
-    maxTurns: 50,                // Max tool calls per message
-    allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep']
+    workspace: '~/clawd',
+    maxTurns: 100,
+    allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
+    provider: 'claude',
+    opencode: {
+      model: 'opencode/gpt-5-nano',
+      hostname: '127.0.0.1',
+      port: 4096
+    }
   },
 
   browser: {
     enabled: true,
-    mode: 'clawd',               // 'clawd' or 'chrome'
+    mode: 'clawd',
     ...
   }
 }
 ```
+
+### Security
+
+Each platform has an allowlist for DMs and groups. Set to `['*']` to allow all, or list specific IDs.
+
+```javascript
+whatsapp: {
+  allowedDMs: ['+1234567890'],     // only this number can DM
+  allowedGroups: ['*'],            // all groups allowed
+  respondToMentionsOnly: true      // in groups, only respond when @mentioned
+}
+```
+
+Messages from unrecognized senders are silently dropped.
 
 ---
 
@@ -165,232 +283,142 @@ The configuration includes:
 
 ### WhatsApp
 
-WhatsApp uses QR code authentication. No additional setup required beyond enabling it in config.
+Uses QR code authentication. No bot token needed.
 
-1. Enable WhatsApp in config or run the setup wizard
-2. Start the gateway: `node cli.js` then select "Start gateway"
-3. A QR code will appear in your terminal
-4. Open WhatsApp on your phone, go to Settings > Linked Devices > Link a Device
-5. Scan the QR code
-
-Your session is saved in `auth_whatsapp/`. You only need to scan once unless you log out.
-
-**Configuration options:**
-
-```javascript
-whatsapp: {
-  enabled: true,
-  allowedDMs: ['*'],           // '*' allows all direct messages
-  allowedGroups: [],           // Add group JIDs to allow specific groups
-  respondToMentionsOnly: true  // In groups, only respond when @mentioned
-}
-```
+1. Enable in config or run the setup wizard
+2. Start the gateway
+3. Scan the QR code that appears in your terminal (WhatsApp > Settings > Linked Devices)
+4. Session saves to `auth_whatsapp/` — you only scan once
 
 ### Telegram
 
-You need a bot token from Telegram's BotFather.
-
-1. Open Telegram and message @BotFather
-2. Send `/newbot` and follow the prompts
-3. Copy the bot token (looks like `123456789:ABCdefGHIjklmno...`)
-4. Run the setup wizard or add the token to config:
+1. Message @BotFather on Telegram, send `/newbot`, copy the token
+2. Add the token to config:
 
 ```javascript
 telegram: {
   enabled: true,
   token: 'YOUR_BOT_TOKEN',
   allowedDMs: ['*'],
-  allowedGroups: [],
-  respondToMentionsOnly: true
 }
 ```
 
-Start the gateway and message your bot on Telegram.
+3. Start the gateway, then message your bot
 
 ### Signal
 
-Signal requires the signal-cli tool to be installed and registered.
+Requires signal-cli to be installed and registered.
 
-1. Install signal-cli: https://github.com/AsamK/signal-cli
-2. Register your phone number:
-   ```bash
-   signal-cli -u +1234567890 register
-   signal-cli -u +1234567890 verify CODE
-   ```
-3. Configure in config.js:
+```bash
+signal-cli -u +1234567890 register
+signal-cli -u +1234567890 verify CODE
+```
+
+Then configure:
 
 ```javascript
 signal: {
   enabled: true,
   phoneNumber: '+1234567890',
-  signalCliPath: 'signal-cli',  // or full path to the binary
-  allowedDMs: ['*'],
-  allowedGroups: [],
-  respondToMentionsOnly: true
+  signalCliPath: 'signal-cli',
 }
 ```
 
 ### iMessage
 
-iMessage only works on macOS and requires the `imsg` CLI tool.
+macOS only. Requires the `imsg` CLI tool.
 
-1. Make sure you are signed into Messages.app on your Mac
-2. Install imsg:
-   ```bash
-   brew install steipete/formulae/imsg
-   ```
-   Or download from: https://github.com/steipete/imsg
-3. Enable in config:
-
-```javascript
-imessage: {
-  enabled: true,
-  allowedDMs: ['*'],
-  allowedGroups: [],
-  respondToMentionsOnly: true
-}
+```bash
+brew install steipete/formulae/imsg
 ```
+
+Enable in config. Make sure Messages.app is open and signed in.
+
+---
+
+## Tool Approvals
+
+The gateway runs with permission mode `default`, which means the assistant asks for approval before using certain tools. When a tool needs approval:
+
+**In terminal chat:** the spinner pauses, the tool name and details are printed, and you type `y` or `n` to approve or deny.
+
+**On messaging platforms:** the assistant sends you a message like "Claude wants to use Bash. Reply Y to allow, N to deny." Your next reply resolves the approval.
+
+If the assistant uses `AskUserQuestion` to ask clarifying questions, these are formatted as numbered options. Reply with a number or type your answer.
+
+Approvals time out after 2 minutes with no response.
 
 ---
 
 ## Browser Control
 
-Clawd can control a web browser to navigate pages, click buttons, fill forms, and take screenshots. There are two modes:
+Two modes for browser automation.
 
 ### Clawd Mode (Isolated Browser)
 
-This launches a dedicated Chromium browser with its own profile. Your browsing data is kept separate from your personal browser.
+Launches a dedicated Chromium instance with its own profile. Clean slate, no existing logins.
 
-**Setup:**
-
-1. Run `node cli.js` and select "Configure browser"
-2. Select "clawd - Managed browser"
-3. When prompted, allow it to install Playwright's Chromium browser
-4. Choose a profile path or accept the default (`~/.clawd-browser-profile`)
-5. Choose whether to run headless (no visible window)
-
-The browser will launch automatically when you start the gateway or terminal chat.
-
-**When to use this mode:**
-- You want a clean, isolated browsing environment
-- You do not need existing login sessions
-- You want to see exactly what the assistant is doing
+Setup: run the CLI, select "Configure browser", choose "clawd". Install Playwright Chromium when prompted.
 
 ### Chrome Mode (Your Existing Browser)
 
-This connects to your existing Chrome browser, giving the assistant access to your logged-in sessions. Useful when you need the assistant to interact with sites where you are already authenticated.
+Connects to your running Chrome via CDP. Keeps your logged-in sessions.
 
-**Setup:**
+Start Chrome with remote debugging:
 
-1. Run `node cli.js` and select "Configure browser"
-2. Select "chrome - Control your Chrome"
-3. Note the CDP port (default 9222)
-
-**Before starting the gateway**, you must launch Chrome with remote debugging enabled:
-
-macOS:
 ```bash
+# macOS
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-```
 
-Linux:
-```bash
+# Linux
 google-chrome --remote-debugging-port=9222
 ```
 
-Windows:
-```bash
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
-```
+Then start the gateway. It connects to your Chrome.
 
-Then start the gateway. The assistant will connect to your running Chrome instance.
+Security note: this gives the assistant access to all your open tabs and sessions.
 
-**When to use this mode:**
-- You need the assistant to use your logged-in sessions (Gmail, GitHub, etc.)
-- You want to watch and interact with the same browser the assistant controls
+### Available Browser Tools
 
-**Security note:** This mode gives the assistant access to all your open tabs and logged-in sessions. Only use with sites you trust the assistant to access.
+`browser_navigate`, `browser_snapshot`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_press`, `browser_tabs`, `browser_switch_tab`, `browser_new_tab`, `browser_close_tab`, `browser_back`, `browser_forward`, `browser_reload`
 
-### Browser Tools Available to the Assistant
-
-Once browser is enabled, the assistant can:
-
-- `browser_navigate` - Go to a URL
-- `browser_snapshot` - Get the page structure (accessibility tree)
-- `browser_screenshot` - Take a screenshot
-- `browser_click` - Click elements
-- `browser_type` - Type into input fields
-- `browser_press` - Press keyboard keys
-- `browser_tabs` - List open tabs
-- `browser_switch_tab` - Switch between tabs
-- `browser_new_tab` / `browser_close_tab` - Manage tabs
-- `browser_back` / `browser_forward` / `browser_reload` - Navigation
+The assistant prefers Composio tools for app tasks (email, Slack, GitHub). Browser tools are only used when you explicitly ask to browse a website.
 
 ---
 
 ## Memory System
 
-Clawd maintains persistent memory across conversations. All memory is stored in the workspace directory (default: `~/clawd/`).
+Persistent memory stored at `~/clawd/`.
 
-### Memory Structure
+```
+~/clawd/
+  MEMORY.md              — long-term: preferences, people, decisions
+  memory/
+    YYYY-MM-DD.md        — daily logs
+    [topic].md           — topic-specific notes
+```
 
-- **MEMORY.md** - Long-term memory for important facts, preferences, and decisions
-- **memory/YYYY-MM-DD.md** - Daily notes, one file per day
+Memory is loaded at the start of each conversation. The assistant writes to memory when you ask it to remember something. It does not proactively write memory on every message.
 
-### How Memory Works
-
-The assistant automatically loads recent memory at the start of each conversation:
-- Long-term memory (MEMORY.md)
-- Yesterday's notes
-- Today's notes
-
-When you tell the assistant to remember something, it decides whether to:
-- Add to MEMORY.md (permanent facts, preferences)
-- Add to today's daily log (temporary notes, tasks completed)
-
-### Examples
-
-"Remember that my favorite coffee shop is Blue Bottle on Market Street"
-- This goes to MEMORY.md
-
-"Remember that I called the dentist today"
-- This goes to today's daily log
-
-### Viewing Memory
-
-Use the `/memory` command in chat to see current memory, or `/memory list` to see all memory files.
+Use the `/memory` command in chat to view or search memories.
 
 ---
 
 ## Scheduling and Reminders
 
-The assistant can schedule messages to be sent later.
+The assistant can schedule messages using cron tools.
 
-### One-time Reminders
+- "Remind me in 30 minutes to check the oven" — one-time delay
+- "Every day at 9am, send me a standup reminder" — cron expression `0 9 * * *`
+- "Every weekday at 8am" — cron expression `0 8 * * 1-5`
 
-"Remind me in 30 minutes to check the oven"
-"Send me a message in 2 hours about the meeting"
-
-### Recurring Messages
-
-"Remind me every day at 9am to take my vitamins"
-"Send me a status update every hour"
-
-### Cron Expressions
-
-For advanced scheduling, the assistant can use cron expressions:
-
-- `0 9 * * *` - Every day at 9:00 AM
-- `0 9 * * 1-5` - Weekdays at 9:00 AM
-- `30 14 * * 1` - Every Monday at 2:30 PM
-
-Scheduled jobs persist across restarts and are stored in `~/.clawd/cron-jobs.json`.
+Jobs persist in `~/.clawd/cron-jobs.json` and execute while the gateway is running.
 
 ---
 
-## App Integrations (Composio)
+## App Integrations
 
-Clawd includes Composio integration, providing access to 500+ apps including:
+Composio provides access to 500+ apps:
 
 - Gmail, Google Calendar, Google Sheets, Google Drive
 - Slack, Discord
@@ -400,181 +428,107 @@ Clawd includes Composio integration, providing access to 500+ apps including:
 - Twitter/X, LinkedIn
 - And many more
 
-### Using Integrations
+Just ask: "Send an email to john@example.com", "Create a GitHub issue for the login bug", "Add an event to my calendar for tomorrow at 3pm".
 
-Just ask the assistant to do something with an app:
-
-"Send an email to john@example.com about the project update"
-"Create a GitHub issue for the login bug"
-"Add an event to my calendar for tomorrow at 3pm"
-
-The first time you use an app, Composio will provide an authentication link. Click it to authorize access, then the assistant can use that app.
+On first use of an app, Composio provides an auth link. Click it to authorize, then the assistant can use that app going forward.
 
 ---
 
 ## Commands
 
-### CLI Commands
-
-Run these from your terminal:
+### CLI
 
 ```bash
-node cli.js              # Interactive menu
-node cli.js chat         # Start terminal chat directly
-node cli.js start        # Start the gateway directly
-node cli.js setup        # Run the setup wizard
-node cli.js config       # Show current configuration
-node cli.js help         # Show help
+node cli.js              # interactive menu
+node cli.js chat         # terminal chat
+node cli.js start        # start gateway
+node cli.js setup        # setup wizard
+node cli.js config       # show config
+node cli.js help         # help
 ```
 
-Or if you link the package globally:
-
-```bash
-npm link
-clawd              # Interactive menu
-clawd chat         # Terminal chat
-clawd start        # Start gateway
-```
-
-### Chat Commands
-
-Use these commands while chatting with Clawd on any platform:
+### In Chat
 
 | Command | Description |
 |---------|-------------|
-| `/new` or `/reset` | Start a fresh conversation, clearing context |
-| `/status` | Show session information |
-| `/memory` | Show current memory summary |
+| `/new`, `/reset` | Start a fresh conversation |
+| `/status` | Show session info |
+| `/memory` | Show memory summary |
 | `/memory list` | List all memory files |
-| `/memory search <query>` | Search through memories |
-| `/queue` | Show message queue status |
-| `/stop` | Stop the current operation |
-| `/help` | Show available commands |
+| `/memory search <query>` | Search memories |
+| `/model` | Switch model (terminal only) |
+| `/queue` | Message queue status |
+| `/stop` | Stop current operation |
+| `/help` | Show commands |
 
 ---
 
 ## Troubleshooting
 
-### "ANTHROPIC_API_KEY not set"
+**"ANTHROPIC_API_KEY not set"** — export the key in your shell or `.env` file.
 
-Set your API key as an environment variable:
+**"claude: command not found"** — Claude Code is not installed. Run `curl -fsSL https://claude.ai/install.sh | bash`.
 
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-```
+**"opencode: command not found"** — Opencode is not installed. Run `curl -fsSL https://opencode.ai/install | bash`.
 
-Add this to your shell profile (`.bashrc`, `.zshrc`, etc.) to make it permanent.
+**Composio not working** — make sure `COMPOSIO_API_KEY` is set. Run `composio login` and `composio whoami` to get your key.
 
-### Composio Not Working / "Failed to initialize"
+**WhatsApp QR not appearing** — delete `auth_whatsapp/` and restart.
 
-Make sure your Composio API key is set:
+**Browser not starting (clawd mode)** — run `npx playwright install chromium`.
 
-```bash
-export COMPOSIO_API_KEY=your-api-key
-```
+**Browser not connecting (chrome mode)** — make sure Chrome is running with `--remote-debugging-port=9222` before starting the gateway.
 
-If you do not have an API key:
+**Telegram bot not responding** — verify the token, make sure you sent `/start` to your bot, check `enabled: true`.
 
-```bash
-curl -fsSL https://composio.dev/install | bash
-composio login
-composio whoami   # Shows your API key
-```
+**Signal not working** — verify signal-cli is installed, phone number is registered and includes country code.
 
-You can also check your Composio dashboard at https://app.composio.dev
+**iMessage not working** — macOS only. Check that Messages.app is open, imsg is installed (`which imsg`), and accessibility permissions are granted.
 
-### WhatsApp QR Code Not Appearing
+**Opencode server failing** — if port 4096 is already in use from a previous run, kill the old process: `kill $(lsof -ti :4096)`. The provider auto-detects running servers, so usually this resolves itself.
 
-Delete the `auth_whatsapp/` folder and restart the gateway to force a new authentication.
-
-### Browser Not Starting (Clawd Mode)
-
-Run the browser setup again and make sure Playwright's Chromium is installed:
-
-```bash
-npx playwright install chromium
-```
-
-### Browser Not Connecting (Chrome Mode)
-
-Make sure Chrome is running with remote debugging enabled before starting the gateway:
-
-```bash
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-```
-
-Check that the port in your config matches the port Chrome is using.
-
-### Telegram Bot Not Responding
-
-- Verify your bot token is correct
-- Make sure you have started a conversation with your bot (send `/start`)
-- Check that `enabled: true` is set in the telegram config
-
-### Signal Not Working
-
-- Verify signal-cli is installed and in your PATH
-- Make sure your phone number is registered and verified
-- Check the phone number format includes country code (e.g., `+1234567890`)
-
-### iMessage Not Working
-
-- Only works on macOS
-- Make sure Messages.app is open and signed in
-- Verify imsg is installed: `which imsg`
-- Grant terminal/application accessibility permissions if prompted
-
-### Memory Not Persisting
-
-Check that the workspace directory exists and is writable:
-
-```bash
-ls -la ~/clawd/
-```
-
-If it does not exist, it will be created automatically on first use.
-
-### Scheduled Jobs Not Running
-
-- Jobs persist in `~/.clawd/cron-jobs.json`
-- Jobs only execute while the gateway is running
-- Use `/memory list` in chat to check scheduled jobs
+**Memory not persisting on remote** — make sure you have a persistent volume mounted at `/root/clawd`.
 
 ---
 
 ## Directory Structure
 
 ```
-clawd/
-  config.js           # Configuration file
-  cli.js              # CLI entry point
-  gateway.js          # Main gateway process
-  adapters/           # Messaging platform adapters
-    whatsapp.js
-    telegram.js
-    signal.js
-    imessage.js
-  agent/              # Claude agent implementation
-    claude-agent.js
-    runner.js
-  browser/            # Browser control
-    server.js
-    mcp.js
-  memory/             # Memory management
-    manager.js
-  tools/              # Built-in tools
-    cron.js
-  commands/           # Slash command handlers
-    handler.js
-  sessions/           # Session management
-    manager.js
-  auth_whatsapp/      # WhatsApp auth (created on first run)
+secure-openclaw/
+  config.js              configuration
+  cli.js                 CLI entry point (menu, terminal chat)
+  gateway.js             gateway process (messaging platforms)
+  Dockerfile             container build for remote deployment
+  adapters/
+    base.js              base adapter class
+    whatsapp.js          WhatsApp via Baileys
+    telegram.js          Telegram via node-telegram-bot-api
+    signal.js            Signal via signal-cli
+    imessage.js          iMessage via imsg (macOS)
+  agent/
+    claude-agent.js      agent with memory, cron, system prompt
+    runner.js            queue + run coordinator
+  providers/
+    base-provider.js     provider interface
+    claude-provider.js   Claude Agent SDK provider
+    opencode-provider.js Opencode provider
+    index.js             provider registry
+  browser/
+    server.js            browser automation server
+    mcp.js               browser MCP tools
+  memory/
+    manager.js           memory file management
+  tools/
+    cron.js              scheduling tools
+    gateway.js           gateway MCP tools (send_message, etc.)
+  commands/
+    handler.js           slash command handlers
+  sessions/
+    manager.js           session tracking
 
-~/clawd/              # Workspace (created on first run)
-  MEMORY.md           # Long-term memory
-  memory/             # Daily logs
-    2025-01-28.md
-    ...
+~/clawd/                 workspace (created on first use)
+  MEMORY.md              long-term memory
+  memory/                daily logs and topic files
 ```
 
 ---
