@@ -289,6 +289,12 @@ class Gateway {
         return
       }
 
+      // Check for pending /model or /provider selection
+      if (this.commandHandler.handlePendingReply(message.text, message.chatId)) {
+        console.log(`[${platform.toUpperCase()}] Resolved pending command selection: ${message.text}`)
+        return
+      }
+
       try {
         // Check for slash commands first
         const commandResult = await this.commandHandler.execute(
@@ -300,7 +306,9 @@ class Gateway {
 
         if (commandResult.handled) {
           console.log(`[${platform.toUpperCase()}] Command handled: ${message.text.split(' ')[0]}`)
-          await adapter.sendMessage(message.chatId, commandResult.response)
+          if (commandResult.response) {
+            await adapter.sendMessage(message.chatId, commandResult.response)
+          }
           return
         }
 

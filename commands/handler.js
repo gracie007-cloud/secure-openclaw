@@ -1,10 +1,14 @@
+import { getProvider, getAvailableProviders } from '../providers/index.js'
+
 /**
  * Slash command handler for Clawd
- * Processes commands like /new, /reset, /status, /memory
+ * Processes commands like /new, /reset, /status, /memory, /model, /provider
  */
 export default class CommandHandler {
   constructor(gateway) {
     this.gateway = gateway
+    this.pendingModelSelect = new Map() // chatId -> resolve
+    this.pendingProviderSelect = new Map() // chatId -> resolve
   }
 
   /**
@@ -60,10 +64,35 @@ export default class CommandHandler {
       case 'stop':
         return this.handleStop(sessionKey)
 
+      case 'model':
+        return this.handleModel(args, chatId, adapter)
+
+      case 'provider':
+        return this.handleProvider(args, chatId, adapter)
+
       default:
         // Unknown command, pass to agent
         return { handled: false }
     }
+  }
+
+  /**
+   * Check if a message is a reply to a pending /model or /provider selection
+   */
+  handlePendingReply(text, chatId) {
+    if (this.pendingModelSelect.has(chatId)) {
+      const resolve = this.pendingModelSelect.get(chatId)
+      this.pendingModelSelect.delete(chatId)
+      resolve(text.trim())
+      return true
+    }
+    if (this.pendingProviderSelect.has(chatId)) {
+      const resolve = this.pendingProviderSelect.get(chatId)
+      this.pendingProviderSelect.delete(chatId)
+      resolve(text.trim())
+      return true
+    }
+    return false
   }
 
   async handleReset(sessionKey, adapter, chatId) {
@@ -198,6 +227,126 @@ export default class CommandHandler {
     }
   }
 
+  async handleModel(args, chatId, adapter) {
+    const agent = this.gateway.agentRunner.agent
+    const provider = agent.provider
+    const models = provider.getAvailableModels()
+    const current = provider.getModel()
+
+    // If arg provided directly, e.g. /model 2
+    if (args) {
+      const idx = parseInt(args) - 1
+      if (idx >= 0 && idx < models.length) {
+        provider.setModel(models[idx].id)
+        return { handled: true, response: `✅ Model set to: ${models[idx].label} (${models[idx].id})` }
+      }
+      // Try matching by name
+      const match = models.find(m => m.id.includes(args.toLowerCase()) || m.label.toLowerCase().includes(args.toLowerCase()))
+      if (match) {
+        provider.setModel(match.id)
+        return { handled: true, response: `✅ Model set to: ${match.label} (${match.id})` }
+      }
+      return { handled: true, response: `Unknown model. Use /model to see options.` }
+    }
+
+    // Show list and wait for reply
+    const lines = [
+      `🤖 *Models* (${agent.providerName})`,
+      `Current: ${current || '(default)'}`,
+      ''
+    ]
+    for (let i = 0; i < models.length; i++) {
+      const marker = models[i].id === current ? ' ←' : ''
+      lines.push(`${i + 1}) ${models[i].label}${marker}`)
+    }
+    lines.push('', 'Reply with a number to switch.')
+
+    await adapter.sendMessage(chatId, lines.join('\n'))
+
+    // Wait for reply with timeout
+    const reply = await new Promise((resolve) => {
+      this.pendingModelSelect.set(chatId, resolve)
+      setTimeout(() => {
+        if (this.pendingModelSelect.has(chatId)) {
+          this.pendingModelSelect.delete(chatId)
+          resolve(null)
+        }
+      }, 30000)
+    })
+
+    if (!reply) return { handled: true, response: '' }
+
+    const idx = parseInt(reply) - 1
+    if (idx >= 0 && idx < models.length) {
+      provider.setModel(models[idx].id)
+      return { handled: true, response: `✅ Model set to: ${models[idx].label}` }
+    }
+    return { handled: true, response: 'No change.' }
+  }
+
+  async handleProvider(args, chatId, adapter) {
+    const agent = this.gateway.agentRunner.agent
+    const available = getAvailableProviders()
+    const current = agent.providerName
+
+    // If arg provided directly, e.g. /provider opencode
+    if (args) {
+      const target = args.toLowerCase()
+      if (!available.includes(target)) {
+        return { handled: true, response: `Unknown provider. Available: ${available.join(', ')}` }
+      }
+      if (target === current) {
+        return { handled: true, response: `Already using ${current}.` }
+      }
+      this.switchProvider(agent, target)
+      return { handled: true, response: `✅ Switched to ${target}` }
+    }
+
+    // Show list and wait for reply
+    const lines = [
+      '🔌 *Providers*',
+      `Current: ${current}`,
+      ''
+    ]
+    for (let i = 0; i < available.length; i++) {
+      const marker = available[i] === current ? ' ←' : ''
+      lines.push(`${i + 1}) ${available[i]}${marker}`)
+    }
+    lines.push('', 'Reply with a number to switch.')
+
+    await adapter.sendMessage(chatId, lines.join('\n'))
+
+    const reply = await new Promise((resolve) => {
+      this.pendingProviderSelect.set(chatId, resolve)
+      setTimeout(() => {
+        if (this.pendingProviderSelect.has(chatId)) {
+          this.pendingProviderSelect.delete(chatId)
+          resolve(null)
+        }
+      }, 30000)
+    })
+
+    if (!reply) return { handled: true, response: '' }
+
+    const idx = parseInt(reply) - 1
+    if (idx >= 0 && idx < available.length) {
+      const target = available[idx]
+      if (target === current) return { handled: true, response: `Already using ${current}.` }
+      this.switchProvider(agent, target)
+      return { handled: true, response: `✅ Switched to ${target}` }
+    }
+    return { handled: true, response: 'No change.' }
+  }
+
+  switchProvider(agent, providerName) {
+    const config = agent.provider.config || {}
+    const newProvider = getProvider(providerName, config)
+    agent.provider = newProvider
+    agent.providerName = providerName
+    // Clear sessions since they belong to the old provider
+    agent.sessions.clear()
+  }
+
   handleHelp() {
     const lines = [
       '📖 *Commands*',
@@ -208,6 +357,9 @@ export default class CommandHandler {
       '`/memory list` - List memory files',
       '`/memory search <query>` - Search memories',
       '`/queue` - Show queue status',
+      '`/model` - Switch AI model',
+      '`/model 2` - Switch to model by number',
+      '`/provider` - Switch provider (claude/opencode)',
       '`/stop` - Stop current operation',
       '`/help` - Show this help'
     ]
