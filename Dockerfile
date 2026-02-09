@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package*.json ./
 RUN npm install --production
 
+# Install Claude Code CLI via npm (avoids OOM from native installer)
+RUN npm install -g @anthropic-ai/claude-code
+
 # Install Opencode CLI
 RUN curl -fsSL https://opencode.ai/install | bash
 
@@ -21,7 +24,7 @@ ENV PATH="/root/.opencode/bin:/root/.local/bin:${PATH}"
 
 COPY . .
 
-# Create workspace for memory (Railway volume mounts here)
+# Create workspace for memory
 RUN mkdir -p /root/clawd/memory
 
 # Headless environment — no TTY, no display
