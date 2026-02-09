@@ -25,7 +25,7 @@ ENV PATH="/root/.opencode/bin:/root/.local/bin:${PATH}"
 COPY . .
 
 # Create workspace for memory
-RUN mkdir -p /root/clawd/memory
+RUN mkdir -p /root/secure-openclaw/memory
 
 # Headless environment — no TTY, no display
 ENV CI=true

@@ -1,7 +1,7 @@
 const parseList = (env) => env ? env.split(',').map(s => s.trim()).filter(Boolean) : []
 
 export default {
-  agentId: 'clawd',
+  agentId: 'secure-openclaw',
 
   whatsapp: {
     enabled: true,
@@ -36,7 +36,7 @@ export default {
 
   // Agent configuration
   agent: {
-    workspace: '~/clawd',        // Agent workspace directory
+    workspace: '~/secure-openclaw',        // Agent workspace directory
     maxTurns: 100,                // Max tool-use turns per message
     allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
     provider: 'claude',          // 'claude' or 'opencode'
@@ -49,9 +49,9 @@ export default {
 
   browser: {
     enabled: true,
-    mode: 'clawd',
-    clawd: {
-      userDataDir: '~/.clawd-browser-profile',
+    mode: 'secure-openclaw',
+    'secure-openclaw': {
+      userDataDir: '~/.secure-openclaw-browser-profile',
       headless: process.env.CI === 'true' || process.env.RAILWAY_ENVIRONMENT_ID ? true : false
     },
     chrome: {

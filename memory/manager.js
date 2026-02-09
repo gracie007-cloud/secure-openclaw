@@ -2,11 +2,11 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
-const WORKSPACE = process.env.CLAWD_WORKSPACE || path.join(os.homedir(), 'clawd')
+const WORKSPACE = process.env.SECURE_OPENCLAW_WORKSPACE || path.join(os.homedir(), 'secure-openclaw')
 const MEMORY_DIR = path.join(WORKSPACE, 'memory')
 
 /**
- * Memory Manager for Clawd
+ * Memory Manager for Secure OpenClaw
  * Handles daily logs and curated long-term memory
  */
 export default class MemoryManager {

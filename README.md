@@ -131,65 +131,93 @@ node cli.js start    # start the gateway
 
 The gateway can run on a remote server. Terminal chat is local only.
 
-### Hetzner VPS (Recommended)
+### DigitalOcean (Recommended)
 
-A Hetzner CX22 (~$4/month) is the simplest way to deploy. Full SSH access, native Docker volumes, no platform limitations.
+A $6/month DigitalOcean droplet. No ID verification, just sign up and go.
 
-#### Option A: Interactive setup (SSH in)
+#### 1. Create a droplet
+
+1. Sign up at [digitalocean.com](https://www.digitalocean.com/)
+2. **Create** > **Droplets**
+3. Pick a region, select **Ubuntu 24.04**, choose the **$6/mo** plan (1 GB RAM)
+4. Set a **root password**
+5. Click **Create Droplet** and copy the **public IP** from the dashboard
+
+#### 2. Set up the server
 
 ```bash
-ssh root@your-server-ip
-git clone <repo-url> secure-openclaw
+# SSH in
+ssh root@YOUR_DROPLET_IP
+
+# Add swap (the build needs more than 1 GB)
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# Clone the repo (use a GitHub PAT if private)
+git clone https://github.com/YOUR_USERNAME/secure-openclaw.git
 cd secure-openclaw
-bash setup.sh
 ```
 
-The setup script installs Docker, prompts for your API keys, and starts everything via Docker Compose.
-
-#### Option B: Cloud-init (zero SSH)
-
-When creating the Hetzner server, paste this into the **Cloud config** (User data) field. Replace the API key placeholders with your actual keys.
-
-```yaml
-#cloud-config
-packages:
-  - git
-
-runcmd:
-  - curl -fsSL https://get.docker.com | sh
-  - git clone <repo-url> /opt/secure-openclaw
-  - cd /opt/secure-openclaw && cp .env.example .env
-  - |
-    sed -i 's|ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=YOUR_KEY_HERE|' /opt/secure-openclaw/.env
-    sed -i 's|COMPOSIO_API_KEY=.*|COMPOSIO_API_KEY=YOUR_KEY_HERE|' /opt/secure-openclaw/.env
-    sed -i 's|WHATSAPP_ALLOWED_DMS=.*|WHATSAPP_ALLOWED_DMS=*|' /opt/secure-openclaw/.env
-    sed -i 's|TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=YOUR_TOKEN_HERE|' /opt/secure-openclaw/.env
-    sed -i 's|TELEGRAM_ALLOWED_DMS=.*|TELEGRAM_ALLOWED_DMS=*|' /opt/secure-openclaw/.env
-  - cd /opt/secure-openclaw && docker compose up -d --build
-```
-
-The server boots fully provisioned. No SSH needed.
-
-#### After deploy
-
-- **WhatsApp QR:** `http://your-server-ip:4096/qr` — scan with WhatsApp > Linked Devices
-- **Telegram:** works immediately with the bot token
-- **Health check:** `http://your-server-ip:4096/`
-- **Logs:** `ssh root@your-server-ip` then `cd /opt/secure-openclaw && docker compose logs -f`
-
-Volumes for WhatsApp auth and memory are handled automatically by Docker Compose.
-
-### Other VPS providers
-
-Any Linux VPS works (DigitalOcean, Vultr, AWS EC2). Same steps as Hetzner Option A — SSH in, clone, run `setup.sh`.
-
-### Manual Docker Compose
+#### 3. Add your keys
 
 ```bash
 cp .env.example .env
-# edit .env with your keys
-docker compose up -d --build
+nano .env
 ```
+
+Fill in `ANTHROPIC_API_KEY`, `COMPOSIO_API_KEY`, and whichever platforms you want. Save with `Ctrl+O`, exit with `Ctrl+X`.
+
+#### 4. Deploy
+
+```bash
+docker compose up -d --build
+ufw allow 4096
+```
+
+That's it. Docker Compose reads your `.env`, builds the image (installs Claude Code + Opencode inside), and starts the gateway. WhatsApp auth and memory are persisted in Docker volumes automatically.
+
+#### 5. Connect WhatsApp
+
+Open `http://YOUR_DROPLET_IP:4096/qr` in your browser and scan with WhatsApp > Linked Devices.
+
+#### After deploy
+
+```bash
+docker compose logs -f                          # live logs
+docker compose down && docker compose up -d      # restart
+docker compose exec openclaw sh                  # shell into container
+git pull && docker compose up -d --build         # update
+```
+
+- **Health check:** `http://YOUR_DROPLET_IP:4096/`
+- **Telegram:** works immediately if you set `TELEGRAM_BOT_TOKEN` in `.env`
+
+#### Troubleshooting deployment
+
+**Build gets killed (exit code 137):** Out of memory. Make sure you added swap (step 2).
+
+**Can't access `http://YOUR_IP:4096`:** Run `ufw allow 4096`. Also make sure you're using the **public IP** from the DigitalOcean dashboard, not the internal/private one (starts with `10.`).
+
+**WhatsApp QR page says "Waiting...":** The gateway is still starting. Check logs with `docker compose logs -f` and wait for `[Gateway] Ready`.
+
+**Claude exits with code 1:** Your `ANTHROPIC_API_KEY` is missing or wrong. Check with `docker compose exec openclaw env | grep ANTHROPIC`.
+
+**Private repo clone fails:** GitHub doesn't support password auth. Use a Personal Access Token: `git clone https://YOUR_TOKEN@github.com/...`
+
+**Checking logs:**
+
+```bash
+docker compose logs -f                          # all logs, live
+docker compose logs -f --tail 50                # last 50 lines, then follow
+docker compose logs openclaw 2>&1 | grep ERROR  # filter for errors
+```
+
+### Other VPS providers
+
+Any Linux VPS works (Hetzner, Vultr, AWS Lightsail). Same steps — SSH in, add swap if < 2 GB RAM, install Docker, clone, `docker compose up`.
 
 ### What Runs Where
 
@@ -232,7 +260,7 @@ All settings live in `config.js`. Edit directly or use the setup wizard.
 
 ```javascript
 {
-  agentId: 'clawd',
+  agentId: 'secure-openclaw',
 
   whatsapp: { enabled: true, allowedDMs: [...], allowedGroups: [...] },
   telegram: { enabled: false, token: '', ... },
@@ -240,7 +268,7 @@ All settings live in `config.js`. Edit directly or use the setup wizard.
   imessage: { enabled: false, ... },
 
   agent: {
-    workspace: '~/clawd',
+    workspace: '~/secure-openclaw',
     maxTurns: 100,
     allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
     provider: 'claude',
@@ -253,7 +281,7 @@ All settings live in `config.js`. Edit directly or use the setup wizard.
 
   browser: {
     enabled: true,
-    mode: 'clawd',
+    mode: 'secure-openclaw',
     ...
   }
 }
@@ -350,11 +378,11 @@ Approvals time out after 2 minutes with no response.
 
 Two modes for browser automation.
 
-### Clawd Mode (Isolated Browser)
+### Secure-OpenClaw Mode (Isolated Browser)
 
 Launches a dedicated Chromium instance with its own profile. Clean slate, no existing logins.
 
-Setup: run the CLI, select "Configure browser", choose "clawd". Install Playwright Chromium when prompted.
+Setup: run the CLI, select "Configure browser", choose "secure-openclaw". Install Playwright Chromium when prompted.
 
 ### Chrome Mode (Your Existing Browser)
 
@@ -384,10 +412,10 @@ The assistant prefers Composio tools for app tasks (email, Slack, GitHub). Brows
 
 ## Memory System
 
-Persistent memory stored at `~/clawd/`.
+Persistent memory stored at `~/secure-openclaw/`.
 
 ```
-~/clawd/
+~/secure-openclaw/
   MEMORY.md              — long-term: preferences, people, decisions
   memory/
     YYYY-MM-DD.md        — daily logs
@@ -408,7 +436,7 @@ The assistant can schedule messages using cron tools.
 - "Every day at 9am, send me a standup reminder" — cron expression `0 9 * * *`
 - "Every weekday at 8am" — cron expression `0 8 * * 1-5`
 
-Jobs persist in `~/.clawd/cron-jobs.json` and execute while the gateway is running.
+Jobs persist in `~/.secure-openclaw/cron-jobs.json` and execute while the gateway is running.
 
 ---
 
@@ -471,7 +499,7 @@ node cli.js help         # help
 
 **WhatsApp QR not appearing** — delete `auth_whatsapp/` and restart.
 
-**Browser not starting (clawd mode)** — run `npx playwright install chromium`.
+**Browser not starting (secure-openclaw mode)** — run `npx playwright install chromium`.
 
 **Browser not connecting (chrome mode)** — make sure Chrome is running with `--remote-debugging-port=9222` before starting the gateway.
 
@@ -483,7 +511,7 @@ node cli.js help         # help
 
 **Opencode server failing** — if port 4096 is already in use from a previous run, kill the old process: `kill $(lsof -ti :4096)`. The provider auto-detects running servers, so usually this resolves itself.
 
-**Memory not persisting on remote** — make sure you have a persistent volume mounted at `/root/clawd`.
+**Memory not persisting on remote** — make sure you have a persistent volume mounted at `/root/secure-openclaw`.
 
 ---
 
@@ -522,7 +550,7 @@ secure-openclaw/
   sessions/
     manager.js           session tracking
 
-~/clawd/                 workspace (created on first use)
+~/secure-openclaw/       workspace (created on first use)
   MEMORY.md              long-term memory
   memory/                daily logs and topic files
 ```

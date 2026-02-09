@@ -13,7 +13,7 @@ import { Composio } from '@composio/core'
 import { BrowserServer, createBrowserMcpServer } from './browser/index.js'
 
 /**
- * Clawd Gateway - Routes messages between messaging platforms and Claude agent
+ * Secure OpenClaw Gateway - Routes messages between messaging platforms and Claude agent
  */
 class Gateway {
   constructor() {
@@ -22,6 +22,7 @@ class Gateway {
       allowedTools: config.agent?.allowedTools || ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
       maxTurns: config.agent?.maxTurns || 50,
       provider: config.agent?.provider || 'claude',
+      permissionMode: 'bypassPermissions',
       opencode: config.agent?.opencode || {}
     })
     this.commandHandler = new CommandHandler(this)
@@ -37,7 +38,7 @@ class Gateway {
   }
 
   async initMcpServers() {
-    const userId = config.agentId || 'clawd-user'
+    const userId = config.agentId || 'secure-openclaw-user'
     console.log('[Composio] Initializing session for:', userId)
     try {
       this.composioSession = await this.composio.create(userId)
@@ -52,7 +53,7 @@ class Gateway {
     }
 
     if (config.browser?.enabled) {
-      console.log('[Browser] Mode:', config.browser.mode || 'clawd')
+      console.log('[Browser] Mode:', config.browser.mode || 'secure-openclaw')
 
       try {
         this.browserServer = new BrowserServer(config.browser)
@@ -167,10 +168,10 @@ class Gateway {
 
   async start() {
     console.log('='.repeat(50))
-    console.log('Clawd Gateway Starting')
+    console.log('Secure OpenClaw Gateway Starting')
     console.log('='.repeat(50))
     console.log(`Agent ID: ${config.agentId}`)
-    console.log(`Workspace: ~/clawd/`)
+    console.log(`Workspace: ~/secure-openclaw/`)
     console.log('')
 
     const platforms = ['whatsapp', 'imessage', 'telegram', 'signal']

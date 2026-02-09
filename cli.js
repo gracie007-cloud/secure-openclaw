@@ -186,7 +186,7 @@ async function changeProvider() {
 }
 
 async function startGateway() {
-  print('\n🚀 Starting Clawd Gateway...\n', colors.green)
+  print('\n🚀 Starting Secure OpenClaw Gateway...\n', colors.green)
   rl.close()
 
   // Dynamic import to start the gateway
@@ -303,7 +303,7 @@ async function terminalChat() {
     // Initialize Composio
     try {
       const composio = new Composio()
-      const session = await composio.create(config.agentId || 'clawd-terminal')
+      const session = await composio.create(config.agentId || 'secure-openclaw-terminal')
       mcpServers.composio = {
         type: 'http',
         url: session.mcp.url,
@@ -499,7 +499,6 @@ async function terminalChat() {
     let isRunning = false
     let wasInterrupted = false
     let pendingModelSelect = null // resolve function for model keypress
-
     let inputBarLineCount = 0
     let cursorInInputBar = false
 
@@ -1111,7 +1110,7 @@ async function browserSetup() {
   print('━'.repeat(40), colors.dim)
   print('')
   print('Select browser mode:\n')
-  print('  1) clawd - Managed browser (isolated profile)', colors.green)
+  print('  1) secure-openclaw - Managed browser (isolated profile)', colors.green)
   print('     A dedicated Chromium instance with its own profile')
   print('     Best for: Clean slate, no existing logins\n')
   print('  2) chrome - Control your Chrome (keeps logins)', colors.blue)
@@ -1124,7 +1123,7 @@ async function browserSetup() {
 
   switch (choice.trim()) {
     case '1':
-      await setupClawdBrowser()
+      await setupManagedBrowser()
       break
     case '2':
       await setupChromeBrowser()
@@ -1146,8 +1145,8 @@ async function browserSetup() {
   await mainMenu()
 }
 
-async function setupClawdBrowser() {
-  print('\n🔷 Clawd Browser Setup\n', colors.green)
+async function setupManagedBrowser() {
+  print('\n🔷 Secure OpenClaw Browser Setup\n', colors.green)
   print('This launches an isolated Chromium browser with a dedicated profile.')
   print('Your browsing data will be stored separately from your main browser.\n')
 
@@ -1172,7 +1171,7 @@ async function setupClawdBrowser() {
         return
       }
     } else {
-      print('\n⚠️  Browser setup cancelled. Chromium is required for clawd mode.', colors.yellow)
+      print('\n⚠️  Browser setup cancelled. Chromium is required for secure-openclaw mode.', colors.yellow)
       print('   Install with: npx playwright install chromium\n', colors.cyan)
       return
     }
@@ -1180,19 +1179,19 @@ async function setupClawdBrowser() {
     print('  ✅ Chromium found\n', colors.green)
   }
 
-  const customPath = await prompt('Custom profile path (press Enter for default ~/.clawd-browser-profile): ')
+  const customPath = await prompt('Custom profile path (press Enter for default ~/.secure-openclaw-browser-profile): ')
   const headlessChoice = await prompt('Run headless (no visible window)? (y/n, default: n): ')
 
-  const userDataDir = customPath.trim() || '~/.clawd-browser-profile'
+  const userDataDir = customPath.trim() || '~/.secure-openclaw-browser-profile'
   const headless = headlessChoice.toLowerCase() === 'y'
 
   await updateBrowserConfig({
     enabled: true,
-    mode: 'clawd',
-    clawd: { userDataDir, headless }
+    mode: 'secure-openclaw',
+    'secure-openclaw': { userDataDir, headless }
   })
 
-  print('\n✅ Browser configured: clawd mode', colors.green)
+  print('\n✅ Browser configured: secure-openclaw mode', colors.green)
   print(`   Profile: ${userDataDir}`, colors.dim)
   print(`   Headless: ${headless}\n`, colors.dim)
 }
@@ -1258,10 +1257,10 @@ async function updateBrowserConfig(updates) {
 
     const newBrowserBlock = `browser: {
     enabled: ${updates.enabled},
-    mode: '${escapeQuotes(updates.mode) || 'clawd'}',
-    clawd: {
-      userDataDir: '${escapeQuotes(updates.clawd?.userDataDir) || '~/.clawd-browser-profile'}',
-      headless: ${updates.clawd?.headless ?? false}
+    mode: '${escapeQuotes(updates.mode) || 'secure-openclaw'}',
+    'secure-openclaw': {
+      userDataDir: '${escapeQuotes(updates['secure-openclaw']?.userDataDir) || '~/.secure-openclaw-browser-profile'}',
+      headless: ${updates['secure-openclaw']?.headless ?? false}
     },
     chrome: {
       profilePath: '${escapeQuotes(updates.chrome?.profilePath) || ''}',
@@ -1380,7 +1379,7 @@ if (args.length === 0) {
       break
 
     case 'start':
-      print('\n🚀 Starting Clawd Gateway...\n', colors.green)
+      print('\n🚀 Starting Secure OpenClaw Gateway...\n', colors.green)
       import('./gateway.js')
       break
 
