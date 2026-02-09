@@ -18,7 +18,7 @@ export default {
   },
 
   telegram: {
-    enabled: false,
+    enabled: true,
     token: process.env.TELEGRAM_BOT_TOKEN || '',
     allowedDMs: parseList(process.env.TELEGRAM_ALLOWED_DMS),       // user IDs, or '*' for all
     allowedGroups: parseList(process.env.TELEGRAM_ALLOWED_GROUPS),

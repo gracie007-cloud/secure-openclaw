@@ -22,8 +22,19 @@ export default class WhatsAppAdapter extends BaseAdapter {
     super(config)
     this.sock = null
     this.myJid = null
+    this.myLid = null
     this.jidMap = new Map()
     this.latestQr = null
+    this.sentMessageIds = new Set()
+    // LID↔phone bidirectional maps (populated from contacts events)
+    this.lidToPhone = new Map()
+    this.phoneToLid = new Map()
+    // Normalize allowedDMs: accept bare numbers, add @s.whatsapp.net if missing
+    this.config.allowedDMs = this.config.allowedDMs.map(entry => {
+      if (entry === '*') return entry
+      if (entry.includes('@')) return entry
+      return `${entry}@s.whatsapp.net`
+    })
   }
 
   async start() {
@@ -66,11 +77,53 @@ export default class WhatsAppAdapter extends BaseAdapter {
       if (connection === 'open') {
         this.latestQr = null
         this.myJid = this.sock.user?.id
-        console.log(`[WhatsApp] Connected as ${this.myJid}`)
+        this.myLid = this.sock.user?.lid || null
+        console.log(`[WhatsApp] Connected as ${this.myJid} (LID: ${this.myLid})`)
+
+        // Always allow messaging yourself (self-DM) — add both phone JID and LID formats
+        if (!this.config.allowedDMs.includes('*')) {
+          if (this.myJid) {
+            const selfJid = this.myJid.replace(/:.*@/, '@')
+            if (!this.config.allowedDMs.includes(selfJid)) {
+              this.config.allowedDMs.push(selfJid)
+              console.log(`[WhatsApp] Auto-allowed self-DM (phone): ${selfJid}`)
+            }
+          }
+          if (this.myLid) {
+            const selfLid = this.myLid.replace(/:.*@/, '@')
+            if (!this.config.allowedDMs.includes(selfLid)) {
+              this.config.allowedDMs.push(selfLid)
+              console.log(`[WhatsApp] Auto-allowed self-DM (LID): ${selfLid}`)
+            }
+          }
+        }
+
+        // Seed own LID↔phone mapping
+        if (this.myJid && this.myLid) {
+          this._mapContact(this.myJid, this.myLid)
+        }
+
+        // Resolve allowlisted phone numbers to LIDs
+        this._resolveAllowlist()
       }
     })
 
     this.sock.ev.on('creds.update', saveCreds)
+
+    // Learn LID↔phone mappings from all contact-related events
+    const learnContacts = (contacts) => {
+      let learned = 0
+      for (const c of contacts) {
+        if (c.id && c.lid) { this._mapContact(c.id, c.lid); learned++ }
+      }
+      if (learned) console.log(`[WhatsApp] Learned ${learned} contacts (total map: ${this.lidToPhone.size})`)
+    }
+    this.sock.ev.on('contacts.upsert', learnContacts)
+    this.sock.ev.on('contacts.update', learnContacts)
+    // History sync (fires on first connect, has contacts with both id+lid)
+    this.sock.ev.on('messaging-history.set', ({ contacts }) => {
+      if (contacts?.length) learnContacts(contacts)
+    })
 
     this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return
@@ -97,7 +150,13 @@ export default class WhatsAppAdapter extends BaseAdapter {
     }
 
     const targetJid = this.jidMap?.get(chatId) || chatId
-    await this.sock.sendMessage(targetJid, { text })
+    const sentMsg = await this.sock.sendMessage(targetJid, { text })
+
+    // Track sent message ID so we can filter out our own echoes in self-DMs
+    if (sentMsg?.key?.id) {
+      this.sentMessageIds.add(sentMsg.key.id)
+      setTimeout(() => this.sentMessageIds.delete(sentMsg.key.id), 10000)
+    }
   }
 
   async sendTyping(chatId) {
@@ -150,12 +209,86 @@ export default class WhatsAppAdapter extends BaseAdapter {
     }
   }
 
+  /**
+   * At connection time, resolve allowlisted phone numbers to their LIDs
+   * so we can match incoming LID-based messages against the phone allowlist.
+   */
+  async _resolveAllowlist() {
+    const phoneEntries = this.config.allowedDMs.filter(e => e.endsWith('@s.whatsapp.net'))
+    if (!phoneEntries.length || this.config.allowedDMs.includes('*')) return
+
+    console.log(`[WhatsApp] Resolving ${phoneEntries.length} allowlisted numbers...`)
+    for (const phoneJid of phoneEntries) {
+      // Skip if already mapped
+      if (this.phoneToLid.has(phoneJid)) continue
+      const num = phoneJid.replace('@s.whatsapp.net', '')
+      try {
+        const [result] = await this.sock.onWhatsApp(num)
+        if (result) {
+          if (result.lid) {
+            const lid = result.lid.replace(/:.*@/, '@')
+            this._mapContact(phoneJid, lid)
+            // Also add the LID to the allowlist directly
+            if (!this.config.allowedDMs.includes(lid)) {
+              this.config.allowedDMs.push(lid)
+            }
+            console.log(`[WhatsApp] Resolved ${num} → LID ${lid}`)
+          }
+        }
+      } catch (err) {
+        console.log(`[WhatsApp] Could not resolve ${num}: ${err.message}`)
+      }
+    }
+    console.log(`[WhatsApp] Allowlist resolved (${this.lidToPhone.size} LID↔phone pairs)`)
+  }
+
+  /**
+   * Store a LID↔phone mapping (strips :device suffixes)
+   */
+  _mapContact(phoneJid, lidJid) {
+    const phone = phoneJid.replace(/:.*@/, '@')
+    const lid = lidJid.replace(/:.*@/, '@')
+    this.lidToPhone.set(lid, phone)
+    this.phoneToLid.set(phone, lid)
+  }
+
+  /**
+   * Check if a chatId is in the allowedDMs list.
+   * Handles LID↔phone translation so users can just put phone numbers in the env var.
+   */
+  _isAllowedDM(chatId, allowedDMs) {
+    if (allowedDMs.includes('*')) return true
+    // Direct match (e.g. chatId is phone JID and allowlist has phone JID)
+    if (allowedDMs.includes(chatId)) return true
+    // Translate via map: chatId is LID → look up phone, or vice versa
+    const alt = this.lidToPhone.get(chatId) || this.phoneToLid.get(chatId)
+    if (alt && allowedDMs.includes(alt)) return true
+    return false
+  }
+
   async handleMessage(msg) {
-    if (msg.key.fromMe) return
+    if (msg.key.fromMe) {
+      if (this.sentMessageIds.has(msg.key.id)) {
+        this.sentMessageIds.delete(msg.key.id)
+        return // This is our own bot reply echoing back
+      }
+      // Otherwise this is the user messaging themselves — allow it through
+    }
 
     const jid = msg.key.remoteJid
     const isGroup = jid?.endsWith('@g.us')
     const sender = isGroup ? msg.key.participant : jid
+
+    // Early bail-out for DMs: check allowlist before any heavy work
+    if (!isGroup) {
+      if (!this._isAllowedDM(jid, this.config.allowedDMs)) {
+        return
+      }
+    } else {
+      // Early bail-out for groups: check group allowlist (mention check comes later)
+      if (this.config.allowedGroups.length === 0) return
+      if (!this.config.allowedGroups.includes('*') && !this.config.allowedGroups.includes(jid)) return
+    }
 
     // Extract text
     let text = msg.message?.conversation ||
@@ -164,7 +297,21 @@ export default class WhatsAppAdapter extends BaseAdapter {
       msg.message?.videoMessage?.caption ||
       ''
 
-    // Check for image
+    // Extract mentions (needed for group mention-gating)
+    const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+    const myNumber = this.myJid?.split('@')[0]?.split(':')[0]
+    const myLidNumber = this.myLid?.split('@')[0]?.split(':')[0]
+    const isMentioned = mentions.some(m => {
+      const mBase = m.split('@')[0]?.split(':')[0]
+      return (myNumber && mBase === myNumber) || (myLidNumber && mBase === myLidNumber)
+    })
+
+    // Group mention-only gating — bail before downloading images
+    if (isGroup && this.config.respondToMentionsOnly && !isMentioned) {
+      return
+    }
+
+    // Check for image (only after passing security checks)
     let image = null
     if (msg.message?.imageMessage) {
       console.log('[WhatsApp] Downloading image...')
@@ -176,7 +323,6 @@ export default class WhatsAppAdapter extends BaseAdapter {
         }
         console.log('[WhatsApp] Image downloaded, size:', buffer.length)
       }
-      // If no caption, set placeholder text
       if (!text) {
         text = '[Image]'
       }
@@ -184,14 +330,7 @@ export default class WhatsAppAdapter extends BaseAdapter {
 
     if (!text && !image) return
 
-    // Extract mentions
-    const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
-    const isMentioned = this.myJid && mentions.some(m =>
-      m.split('@')[0] === this.myJid.split('@')[0] ||
-      m.split(':')[0] === this.myJid.split(':')[0]
-    )
-
-    const message = {
+    this.emitMessage({
       chatId: jid,
       text,
       isGroup,
@@ -199,12 +338,6 @@ export default class WhatsAppAdapter extends BaseAdapter {
       mentions: isMentioned ? ['self'] : mentions,
       image,
       raw: msg
-    }
-
-    if (!this.shouldRespond(message, this.config)) {
-      return
-    }
-
-    this.emitMessage(message)
+    })
   }
 }

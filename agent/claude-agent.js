@@ -2,6 +2,7 @@ import { EventEmitter } from 'events'
 import MemoryManager from '../memory/manager.js'
 import { createCronMcpServer, setContext as setCronContext, getScheduler } from '../tools/cron.js'
 import { createGatewayMcpServer, setGatewayContext } from '../tools/gateway.js'
+import { createAppleScriptMcpServer } from '../tools/applescript.js'
 import { getProvider } from '../providers/index.js'
 
 /**
@@ -93,6 +94,7 @@ When the user sends an image, you will receive it in your context. You can:
 Built-in: Read, Write, Edit, Bash, Glob, Grep, TodoWrite, Skill
 Scheduling: mcp__cron__schedule_delayed, mcp__cron__schedule_recurring, mcp__cron__schedule_cron, mcp__cron__list_scheduled, mcp__cron__cancel_scheduled
 Gateway: mcp__gateway__send_message, mcp__gateway__list_platforms, mcp__gateway__get_queue_status, mcp__gateway__get_current_context, mcp__gateway__list_sessions, mcp__gateway__broadcast_message
+AppleScript (macOS): mcp__applescript__run_script, mcp__applescript__list_apps, mcp__applescript__activate_app, mcp__applescript__display_notification
 Composio: Access to 500+ app integrations (Gmail, Slack, GitHub, Google Sheets, etc.) via Composio MCP tools
 Browser: Browser automation via mcp__browser tools (see below)
 
@@ -147,6 +149,15 @@ Examples:
 2. Use browser_snapshot to see the page structure and get element refs
 3. Use browser_click/browser_type with refs (e.g., "e5") or descriptions to interact
 4. Take browser_screenshot to verify visual state if needed
+
+## AppleScript Tools (macOS only)
+If running on macOS, you have AppleScript automation tools:
+- \`mcp__applescript__run_script\`: Execute arbitrary AppleScript code (control apps, system actions, UI scripting)
+- \`mcp__applescript__list_apps\`: List running foreground applications
+- \`mcp__applescript__activate_app\`: Bring an app to the foreground
+- \`mcp__applescript__display_notification\`: Show a macOS notification
+
+Use these for macOS-specific tasks like controlling apps, showing notifications, or system automation.
 
 ## Important
 - The workspace at ~/secure-openclaw/ is your home — use it to store files and memory
@@ -240,6 +251,15 @@ export default class ClaudeAgent extends EventEmitter {
       'mcp__gateway__list_sessions',
       'mcp__gateway__broadcast_message'
     ]
+
+    // AppleScript tools (macOS only)
+    this.applescriptMcpServer = createAppleScriptMcpServer()
+    this.applescriptTools = this.applescriptMcpServer ? [
+      'mcp__applescript__run_script',
+      'mcp__applescript__list_apps',
+      'mcp__applescript__activate_app',
+      'mcp__applescript__display_notification'
+    ] : []
 
     this.maxTurns = config.maxTurns || 50
     this.permissionMode = config.permissionMode || 'default'
@@ -341,11 +361,12 @@ export default class ClaudeAgent extends EventEmitter {
     const systemPrompt = buildSystemPrompt(memoryContext, { sessionKey, platform }, cronInfo, this.providerName)
 
     // Combine all allowed tools
-    const allAllowedTools = [...this.allowedTools, ...this.cronTools, ...this.gatewayTools]
+    const allAllowedTools = [...this.allowedTools, ...this.cronTools, ...this.gatewayTools, ...this.applescriptTools]
 
     const allMcpServers = {
       cron: this.cronMcpServer,
       gateway: this.gatewayMcpServer,
+      ...(this.applescriptMcpServer ? { applescript: this.applescriptMcpServer } : {}),
       ...mcpServers
     }
 
