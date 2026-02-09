@@ -52,7 +52,7 @@ export default {
     mode: 'secure-openclaw',
     'secure-openclaw': {
       userDataDir: '~/.secure-openclaw-browser-profile',
-      headless: process.env.CI === 'true' || process.env.RAILWAY_ENVIRONMENT_ID ? true : false
+      headless: process.env.BROWSER_HEADLESS === 'true'
     },
     chrome: {
       profilePath: '',

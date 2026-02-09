@@ -27,8 +27,11 @@ COPY . .
 # Create workspace for memory
 RUN mkdir -p /root/secure-openclaw/memory
 
-# Headless environment — no TTY, no display
-ENV CI=true
+# Pre-accept Claude Code TOS for headless/Docker operation
+ENV BROWSER_HEADLESS=true
+RUN mkdir -p /root/.claude && \
+    echo '{}' > /root/.claude/statsig_metadata.json && \
+    echo '{"hasCompletedOnboarding":true}' > /root/.claude/settings.json
 
 EXPOSE 4096
 
