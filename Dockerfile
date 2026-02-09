@@ -19,19 +19,26 @@ RUN npm install -g @anthropic-ai/claude-code
 # Install Opencode CLI
 RUN curl -fsSL https://opencode.ai/install | bash
 
-# Add CLI binary locations to PATH
-ENV PATH="/root/.opencode/bin:/root/.local/bin:${PATH}"
-
 COPY . .
 
-# Create workspace for memory
-RUN mkdir -p /root/secure-openclaw/memory
+# Create non-root user (Claude Code refuses bypassPermissions as root)
+RUN useradd -m -s /bin/bash claw && chown -R claw:claw /app
 
-# Pre-accept Claude Code TOS for headless/Docker operation
+# Set up paths and workspace for the non-root user
+ENV PATH="/home/claw/.opencode/bin:/home/claw/.local/bin:${PATH}"
+ENV HOME=/home/claw
 ENV BROWSER_HEADLESS=true
-RUN mkdir -p /root/.claude && \
-    echo '{}' > /root/.claude/statsig_metadata.json && \
-    echo '{"hasCompletedOnboarding":true}' > /root/.claude/settings.json
+
+# Move opencode CLI to the new user's path
+RUN cp -r /root/.opencode /home/claw/.opencode 2>/dev/null || true && \
+    chown -R claw:claw /home/claw
+
+# Create workspace and Claude config as the non-root user
+USER claw
+RUN mkdir -p /home/claw/secure-openclaw/memory && \
+    mkdir -p /home/claw/.claude && \
+    echo '{}' > /home/claw/.claude/statsig_metadata.json && \
+    echo '{"hasCompletedOnboarding":true}' > /home/claw/.claude/settings.json
 
 EXPOSE 4096
 

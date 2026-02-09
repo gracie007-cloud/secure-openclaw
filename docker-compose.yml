@@ -6,7 +6,7 @@ services:
       - "4096:4096"
     volumes:
       - wa-auth:/app/auth_whatsapp
-      - memory:/root/secure-openclaw
+      - memory:/home/claw/secure-openclaw
     restart: unless-stopped
 
 volumes:
