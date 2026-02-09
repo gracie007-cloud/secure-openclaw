@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'dotenv/config'
 import { createInterface } from 'readline'
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -273,11 +274,6 @@ function drawInputBar(inputText, cols) {
   process.stdout.write(`\r\x1b[${prefix.length + lastLine.length}C`) // move to end of text
 }
 
-function clearInputBar() {
-  // Restore cursor to saved position (top of box) and clear everything below
-  process.stdout.write('\x1b8\x1b[J')
-}
-
 // ── Status bar ──────────────────────────────────────────────────────
 function drawStatusBar(status, cols) {
   const w = Math.min(cols, 120)
@@ -504,17 +500,54 @@ async function terminalChat() {
     let wasInterrupted = false
     let pendingModelSelect = null // resolve function for model keypress
 
-    function redrawInput() {
-      const c = process.stdout.columns || 80
-      // Restore cursor to top of box, clear everything below, redraw
-      process.stdout.write('\x1b8\x1b[J')
-      process.stdout.write('\x1b7') // save new position
-      drawInputBar(inputBuffer || '', c)
+    let inputBarLineCount = 0
+    let cursorInInputBar = false
+
+    function countInputLines(text, innerW) {
+      if (!text) return 1
+      const width = Math.max(innerW, 1)
+      let lines = 0
+      const raw = text.split('\n')
+      for (const r of raw) {
+        lines += Math.max(1, Math.ceil(r.length / width))
+      }
+      return lines
     }
 
-    // Initial draw - save cursor position before drawing
-    process.stdout.write('\x1b7')
-    drawInputBar('', process.stdout.columns || 80)
+    function clearInputBar() {
+      if (!cursorInInputBar || inputBarLineCount <= 0) return
+      const up = Math.max(0, inputBarLineCount - 2) // from last content line to top border
+      if (up > 0) process.stdout.write(`\x1b[${up}A`)
+      for (let i = 0; i < inputBarLineCount; i++) {
+        process.stdout.write('\x1b[2K')
+        if (i < inputBarLineCount - 1) process.stdout.write('\x1b[B')
+      }
+      if (inputBarLineCount > 1) {
+        process.stdout.write(`\x1b[${inputBarLineCount - 1}A`)
+      }
+      process.stdout.write('\r')
+      cursorInInputBar = false
+    }
+
+    function redrawInput() {
+      const c = process.stdout.columns || 80
+      // Erase old box lines (only safe when cursor is still inside the box)
+      if (cursorInInputBar && inputBarLineCount > 0) {
+        clearInputBar()
+      }
+      drawInputBar(inputBuffer || '', c)
+      // Count lines the box occupies (top + content lines + bottom)
+      const innerW = Math.min(c, 120) - 7
+      const contentLines = countInputLines(inputBuffer, innerW)
+      inputBarLineCount = 2 + contentLines // top + content + bottom
+      cursorInInputBar = true
+    }
+
+    // Initial draw
+    const c0 = process.stdout.columns || 80
+    drawInputBar('', c0)
+    inputBarLineCount = 3
+    cursorInInputBar = true
 
     async function handleSubmit(text) {
       if (!text.trim()) {
@@ -536,6 +569,7 @@ async function terminalChat() {
 
       // /model command
       if (text.trim().toLowerCase() === '/model') {
+        cursorInInputBar = false
         inputBuffer = ''
         console.log('\n')
         const models = agent.provider.getAvailableModels()
@@ -564,11 +598,12 @@ async function terminalChat() {
 
         const c = process.stdout.columns || 80
         drawStatusBar(`[${selectedProvider}] [${agent.provider.getModel() || 'default'}] Ready`, c)
-        process.stdout.write('\x1b7')
-        drawInputBar('', c)
+        inputBarLineCount = 0
+        redrawInput()
         return
       }
 
+      cursorInInputBar = false
       isRunning = true
       wasInterrupted = false
       inputBuffer = ''
@@ -711,9 +746,10 @@ async function terminalChat() {
       // Redraw status + input bar
       const c = process.stdout.columns || 80
       const modelLabel = agent.provider.getModel() ? ` [${agent.provider.getModel()}]` : ''
+      cursorInInputBar = false
+      inputBuffer = ''
       drawStatusBar(`[${selectedProvider}]${modelLabel} Ready — /model to switch`, c)
-      process.stdout.write('\x1b7') // save position for new box
-      drawInputBar('', c)
+      redrawInput()
     }
 
     // Handle raw keystrokes
@@ -744,9 +780,10 @@ async function terminalChat() {
           isRunning = false
           const c = process.stdout.columns || 80
           const modelLabel = agent.provider.getModel() ? ` [${agent.provider.getModel()}]` : ''
+          cursorInInputBar = false
+          inputBuffer = ''
           drawStatusBar(`[${selectedProvider}]${modelLabel} Ready — /model to switch`, c)
-          process.stdout.write('\x1b7')
-          drawInputBar('', c)
+          redrawInput()
           ctrlCCount = 0
           return
         }
@@ -759,10 +796,9 @@ async function terminalChat() {
           agent.stopCron()
           process.exit(0)
         }
-        process.stdout.write('\n' + colors.dim + '  Press Ctrl+C again to exit' + colors.reset)
-        // Reset cursor back into input box
-        process.stdout.write('\x1b8')
-        drawInputBar(inputBuffer || '', process.stdout.columns || 80)
+        clearInputBar()
+        process.stdout.write('\n' + colors.dim + '  Press Ctrl+C again to exit' + colors.reset + '\n')
+        redrawInput()
         clearTimeout(ctrlCTimer)
         ctrlCTimer = setTimeout(() => { ctrlCCount = 0 }, 1500)
         return

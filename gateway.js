@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import http from 'http'
 import QRCode from 'qrcode'
 import config from './config.js'

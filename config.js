@@ -39,7 +39,7 @@ export default {
     workspace: '~/clawd',        // Agent workspace directory
     maxTurns: 100,                // Max tool-use turns per message
     allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
-    provider: 'opencode',          // 'claude' or 'opencode'
+    provider: 'claude',          // 'claude' or 'opencode'
     opencode: {
       model: 'opencode/gpt-5-nano',
       hostname: '127.0.0.1',
