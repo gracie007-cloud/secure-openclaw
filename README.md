@@ -131,68 +131,64 @@ node cli.js start    # start the gateway
 
 The gateway can run on a remote server. Terminal chat is local only.
 
-The remote machine needs the same prerequisites: Node.js 18+, Claude Code or Opencode installed, and the relevant API keys.
+### Hetzner VPS (Recommended)
 
-### Railway (Easiest)
+A Hetzner CX22 (~$4/month) is the simplest way to deploy. Full SSH access, native Docker volumes, no platform limitations.
 
-Railway auto-detects the included `Dockerfile`, builds, and runs.
-
-1. Push your repo to GitHub
-2. Go to [railway.app](https://railway.app), sign in with GitHub
-3. New Project > Deploy from GitHub repo
-4. Add environment variables:
-   - `ANTHROPIC_API_KEY`
-   - `COMPOSIO_API_KEY`
-   - `TELEGRAM_BOT_TOKEN` (if using Telegram)
-   - `WHATSAPP_ALLOWED_DMS`, `WHATSAPP_ALLOWED_GROUPS`, etc.
-5. Add a persistent volume mounted at `/app/auth_whatsapp` (for WhatsApp session)
-6. Add a persistent volume mounted at `/root/clawd` (for memory)
-7. Deploy
-
-WhatsApp requires QR code auth on first boot. Check Railway's log panel for the QR code, scan it from your phone. The session persists via the volume.
-
-Telegram works immediately — no QR needed, just the bot token.
-
-Railway free tier: 500 hours/month. After that, roughly $5/month.
-
-The Dockerfile installs both Claude Code and Opencode, so either provider works out of the box. No interactive CLI login is needed — Claude Code authenticates via the `ANTHROPIC_API_KEY` environment variable, and Opencode authenticates via the model provider's API key (e.g. `OPENAI_API_KEY`).
-
-### Docker
+#### Option A: Interactive setup (SSH in)
 
 ```bash
-docker build -t openclaw .
-docker run -d \
-  --name openclaw \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e COMPOSIO_API_KEY=... \
-  -e TELEGRAM_BOT_TOKEN=... \
-  -v openclaw-wa:/app/auth_whatsapp \
-  -v openclaw-memory:/root/clawd \
-  openclaw
-```
-
-### VPS (Manual)
-
-Any Linux VPS (Hetzner, DigitalOcean, AWS EC2):
-
-```bash
-ssh your-server
+ssh root@your-server-ip
 git clone <repo-url> secure-openclaw
 cd secure-openclaw
-npm install
+bash setup.sh
+```
 
-# Install provider
-npm install -g @anthropic-ai/claude-code
+The setup script installs Docker, prompts for your API keys, and starts everything via Docker Compose.
 
-# Set env vars
-export ANTHROPIC_API_KEY=sk-ant-...
-export COMPOSIO_API_KEY=...
+#### Option B: Cloud-init (zero SSH)
 
-# Run with a process manager
-npm install -g pm2
-pm2 start gateway.js --name openclaw
-pm2 save
-pm2 startup
+When creating the Hetzner server, paste this into the **Cloud config** (User data) field. Replace the API key placeholders with your actual keys.
+
+```yaml
+#cloud-config
+packages:
+  - git
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - git clone <repo-url> /opt/secure-openclaw
+  - cd /opt/secure-openclaw && cp .env.example .env
+  - |
+    sed -i 's|ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=YOUR_KEY_HERE|' /opt/secure-openclaw/.env
+    sed -i 's|COMPOSIO_API_KEY=.*|COMPOSIO_API_KEY=YOUR_KEY_HERE|' /opt/secure-openclaw/.env
+    sed -i 's|WHATSAPP_ALLOWED_DMS=.*|WHATSAPP_ALLOWED_DMS=*|' /opt/secure-openclaw/.env
+    sed -i 's|TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=YOUR_TOKEN_HERE|' /opt/secure-openclaw/.env
+    sed -i 's|TELEGRAM_ALLOWED_DMS=.*|TELEGRAM_ALLOWED_DMS=*|' /opt/secure-openclaw/.env
+  - cd /opt/secure-openclaw && docker compose up -d --build
+```
+
+The server boots fully provisioned. No SSH needed.
+
+#### After deploy
+
+- **WhatsApp QR:** `http://your-server-ip:4096/qr` — scan with WhatsApp > Linked Devices
+- **Telegram:** works immediately with the bot token
+- **Health check:** `http://your-server-ip:4096/`
+- **Logs:** `ssh root@your-server-ip` then `cd /opt/secure-openclaw && docker compose logs -f`
+
+Volumes for WhatsApp auth and memory are handled automatically by Docker Compose.
+
+### Other VPS providers
+
+Any Linux VPS works (DigitalOcean, Vultr, AWS EC2). Same steps as Hetzner Option A — SSH in, clone, run `setup.sh`.
+
+### Manual Docker Compose
+
+```bash
+cp .env.example .env
+# edit .env with your keys
+docker compose up -d --build
 ```
 
 ### What Runs Where
