@@ -1,3 +1,5 @@
+import http from 'http'
+import QRCode from 'qrcode'
 import config from './config.js'
 import WhatsAppAdapter from './adapters/whatsapp.js'
 import iMessageAdapter from './adapters/imessage.js'
@@ -254,6 +256,9 @@ class Gateway {
     process.on('SIGINT', () => this.stop())
     process.on('SIGTERM', () => this.stop())
 
+    // Start HTTP server for health checks and WhatsApp QR code
+    this.startHttpServer()
+
     console.log('')
     console.log('[Gateway] Ready and listening for messages')
     console.log('[Gateway] Using Claude Agent SDK with memory + cron + Composio + Browser')
@@ -341,6 +346,44 @@ class Gateway {
           console.error(`[${platform.toUpperCase()}] Failed to send error message:`, sendErr.message)
         }
       }
+    })
+  }
+
+  startHttpServer() {
+    const port = process.env.PORT || 4096
+
+    this.httpServer = http.createServer(async (req, res) => {
+      if (req.url === '/qr') {
+        const wa = this.adapters.get('whatsapp')
+        if (!wa || !wa.latestQr) {
+          res.writeHead(200, { 'Content-Type': 'text/html' })
+          const status = wa?.myJid ? 'WhatsApp is connected.' : 'No QR code available. Waiting for WhatsApp...'
+          res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>WhatsApp QR</title><style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#111;color:#fff}</style></head><body><p>${status}</p></body></html>`)
+          return
+        }
+
+        try {
+          const qrDataUrl = await QRCode.toDataURL(wa.latestQr, { width: 400, margin: 2 })
+          res.writeHead(200, { 'Content-Type': 'text/html' })
+          res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="10"><title>WhatsApp QR</title><style>body{font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#111;color:#fff}img{border-radius:12px}</style></head><body><h2>Scan with WhatsApp</h2><img src="${qrDataUrl}" alt="QR Code"/><p>Page refreshes automatically.</p></body></html>`)
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' })
+          res.end('Failed to generate QR')
+        }
+        return
+      }
+
+      // Health check / status
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      const adaptersStatus = {}
+      for (const [name, adapter] of this.adapters) {
+        adaptersStatus[name] = { connected: !!adapter.sock || !!adapter.bot }
+      }
+      res.end(JSON.stringify({ status: 'ok', adapters: adaptersStatus }))
+    })
+
+    this.httpServer.listen(port, () => {
+      console.log(`[HTTP] Listening on port ${port} (QR code at /qr)`)
     })
   }
 

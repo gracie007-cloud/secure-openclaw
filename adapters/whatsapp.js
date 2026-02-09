@@ -22,7 +22,8 @@ export default class WhatsAppAdapter extends BaseAdapter {
     super(config)
     this.sock = null
     this.myJid = null
-    this.jidMap = new Map() 
+    this.jidMap = new Map()
+    this.latestQr = null
   }
 
   async start() {
@@ -43,6 +44,7 @@ export default class WhatsAppAdapter extends BaseAdapter {
       const { connection, lastDisconnect, qr } = update
 
       if (qr) {
+        this.latestQr = qr
         console.log('\n[WhatsApp] Scan QR code to connect:')
         qrcode.generate(qr, { small: true })
       }
@@ -62,6 +64,7 @@ export default class WhatsAppAdapter extends BaseAdapter {
       }
 
       if (connection === 'open') {
+        this.latestQr = null
         this.myJid = this.sock.user?.id
         console.log(`[WhatsApp] Connected as ${this.myJid}`)
       }
