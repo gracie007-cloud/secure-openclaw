@@ -43,7 +43,7 @@ export default {
     opencode: {
       model: 'opencode/gpt-5-nano',
       hostname: '127.0.0.1',
-      port: 4096
+      port: 4097
     }
   },
 
