@@ -23,6 +23,7 @@ class Gateway {
     })
     this.commandHandler = new CommandHandler(this)
     this.adapters = new Map()
+    this.pendingApprovals = new Map() // chatId -> { resolve, timeout }
     this.composio = new Composio()
     this.composioSession = null
     this.browserServer = null
@@ -130,6 +131,37 @@ class Gateway {
     })
   }
 
+  /**
+   * Send a message and wait for the user's reply.
+   * Used for tool approval prompts and clarifying questions.
+   */
+  waitForApproval(chatId, adapter, message, timeoutMs = 120000) {
+    // Clear any existing pending approval for this chat
+    const existing = this.pendingApprovals.get(chatId)
+    if (existing) {
+      clearTimeout(existing.timeout)
+      existing.resolve(null)
+    }
+
+    return new Promise(async (resolve) => {
+      const timeout = setTimeout(() => {
+        this.pendingApprovals.delete(chatId)
+        resolve(null) // Timeout = no response
+      }, timeoutMs)
+
+      this.pendingApprovals.set(chatId, { resolve, timeout })
+
+      try {
+        await adapter.sendMessage(chatId, message)
+      } catch (err) {
+        console.error('[Gateway] Failed to send approval prompt:', err.message)
+        clearTimeout(timeout)
+        this.pendingApprovals.delete(chatId)
+        resolve(null)
+      }
+    })
+  }
+
   async start() {
     console.log('='.repeat(50))
     console.log('Clawd Gateway Starting')
@@ -138,8 +170,27 @@ class Gateway {
     console.log(`Workspace: ~/clawd/`)
     console.log('')
 
+    const platforms = ['whatsapp', 'imessage', 'telegram', 'signal']
+    for (const p of platforms) {
+      const pc = config[p]
+      if (!pc?.enabled) continue
+      const dms = pc.allowedDMs?.length ? pc.allowedDMs.join(', ') : 'NONE (all blocked)'
+      const groups = pc.allowedGroups?.length ? pc.allowedGroups.join(', ') : 'NONE (all blocked)'
+      console.log(`[Security] ${p}: DMs=${dms} | Groups=${groups}`)
+    }
+
     await this.initMcpServers()
     this.agentRunner.setMcpServers(this.mcpServers)
+
+    // Pre-initialize provider (connect/start server before messages arrive)
+    if (this.agentRunner.agent.provider.initialize) {
+      try {
+        await this.agentRunner.agent.provider.initialize()
+        console.log('[Provider] Ready')
+      } catch (err) {
+        console.error('[Provider] Init failed:', err.message)
+      }
+    }
 
     this.agentRunner.agent.gateway = this
 
@@ -221,6 +272,16 @@ class Gateway {
       console.log(`  Text: ${message.text.substring(0, 100)}${message.text.length > 100 ? '...' : ''}`)
       if (message.image) {
         console.log(`  Image: ${Math.round(message.image.data.length / 1024)}KB`)
+      }
+
+      // Check for pending approval — if one exists, resolve it with the user's reply
+      const pending = this.pendingApprovals.get(message.chatId)
+      if (pending) {
+        console.log(`[${platform.toUpperCase()}] Resolving pending approval with: ${message.text}`)
+        clearTimeout(pending.timeout)
+        this.pendingApprovals.delete(message.chatId)
+        pending.resolve(message.text)
+        return
       }
 
       try {

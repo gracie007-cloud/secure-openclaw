@@ -46,18 +46,27 @@ export class OpencodeProvider extends BaseProvider {
   async initialize() {
     if (this.client) return;
 
+    const baseUrl = this.existingServerUrl || `http://${this.hostname}:${this.port}`;
+
+    // Auto-detect: try connecting to existing server first
     try {
-      if (this.useExistingServer) {
-        const baseUrl = this.existingServerUrl || `http://${this.hostname}:${this.port}`;
+      const res = await fetch(baseUrl, { signal: AbortSignal.timeout(1000) });
+      if (res.ok || res.status < 500) {
         this.client = createOpencodeClient({ baseUrl });
-      } else {
-        const { client, server } = await createOpencode({
-          hostname: this.hostname,
-          port: this.port
-        });
-        this.client = client;
-        this.serverInstance = server;
+        return;
       }
+    } catch (_) {
+      // Not running, fall through to start one
+    }
+
+    // No existing server — start our own
+    try {
+      const { client, server } = await createOpencode({
+        hostname: this.hostname,
+        port: this.port
+      });
+      this.client = client;
+      this.serverInstance = server;
     } catch (error) {
       console.error('[Opencode] Initialization error:', error.message);
       throw error;

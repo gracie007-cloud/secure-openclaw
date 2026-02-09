@@ -179,6 +179,91 @@ export default class AgentRunner extends EventEmitter {
   }
 
   /**
+   * Create a canUseTool callback for messaging platforms.
+   * Sends approval prompts to the user via the adapter and parses their reply.
+   */
+  createMessagingCanUseTool(adapter, chatId) {
+    const gateway = this.agent.gateway
+    if (!gateway) return undefined
+
+    return async (toolName, input, options) => {
+      // Handle AskUserQuestion specially — format as numbered options
+      if (toolName === 'AskUserQuestion') {
+        const questions = input.questions || []
+        let prompt = ''
+        for (const q of questions) {
+          prompt += `${q.question}\n\n`
+          if (q.options) {
+            q.options.forEach((opt, i) => {
+              prompt += `${i + 1}) ${opt.label}`
+              if (opt.description) prompt += ` — ${opt.description}`
+              prompt += '\n'
+            })
+          }
+          prompt += '\nReply with a number or type your answer.'
+        }
+
+        const reply = await gateway.waitForApproval(chatId, adapter, prompt.trim())
+        if (!reply) {
+          return { behavior: 'deny', message: 'No response received (timed out).' }
+        }
+
+        // Parse numbered selection or pass through as free text
+        const num = parseInt(reply.trim())
+        const firstQuestion = questions[0]
+        if (firstQuestion?.options && num >= 1 && num <= firstQuestion.options.length) {
+          const selected = firstQuestion.options[num - 1]
+          return {
+            behavior: 'allow',
+            updatedInput: {
+              ...input,
+              questions: [{
+                ...firstQuestion,
+                answer: selected.label
+              }]
+            }
+          }
+        }
+
+        return {
+          behavior: 'allow',
+          updatedInput: {
+            ...input,
+            questions: [{
+              ...firstQuestion,
+              answer: reply.trim()
+            }]
+          }
+        }
+      }
+
+      // Standard tool approval
+      const reason = options.decisionReason || ''
+      let prompt = `Claude wants to use: ${toolName}`
+      if (reason) prompt += `\n${reason}`
+
+      // Show relevant input details
+      const inputStr = JSON.stringify(input, null, 2)
+      if (inputStr.length < 500) {
+        prompt += `\n\n${inputStr}`
+      }
+      prompt += '\n\nReply Y to allow, N to deny.'
+
+      const reply = await gateway.waitForApproval(chatId, adapter, prompt)
+      if (!reply) {
+        return { behavior: 'deny', message: 'No response received (timed out).', interrupt: true }
+      }
+
+      const answer = reply.trim().toLowerCase()
+      if (answer === 'y' || answer === 'yes') {
+        return { behavior: 'allow', updatedInput: input }
+      }
+
+      return { behavior: 'deny', message: reply.trim() || 'User denied the action.' }
+    }
+  }
+
+  /**
    * Execute a single agent run with streaming messages
    */
   async executeRun(run) {
@@ -192,6 +277,9 @@ export default class AgentRunner extends EventEmitter {
       hasImage: !!image
     })
 
+    // Create canUseTool callback for messaging platforms
+    const canUseTool = this.createMessagingCanUseTool(adapter, chatId)
+
     try {
       let currentText = ''
       let fullText = ''
@@ -202,7 +290,8 @@ export default class AgentRunner extends EventEmitter {
         platform,
         chatId,
         image,
-        mcpServers
+        mcpServers,
+        canUseTool
       })) {
         // Accumulate text
         if (chunk.type === 'text') {

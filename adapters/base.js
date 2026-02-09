@@ -60,26 +60,27 @@ export default class BaseAdapter {
    * @returns {boolean}
    */
   shouldRespond(message, config) {
-    const { chatId, isGroup, mentions } = message
+    const { chatId, isGroup, sender, mentions } = message
 
     if (isGroup) {
-      // Check group allowlist
       if (config.allowedGroups.length === 0) {
+        console.log(`[Security] Blocked group message from ${chatId} (no groups allowed)`)
         return false
       }
       if (!config.allowedGroups.includes('*') && !config.allowedGroups.includes(chatId)) {
+        console.log(`[Security] Blocked group message from ${chatId} (not in allowlist)`)
         return false
       }
-      // Check mention gating for groups
       if (config.respondToMentionsOnly && mentions && !mentions.includes('self')) {
         return false
       }
     } else {
-      // Check DM allowlist
       if (config.allowedDMs.length === 0) {
+        console.log(`[Security] Blocked DM from ${sender || chatId} (no DMs allowed — set allowedDMs in .env)`)
         return false
       }
       if (!config.allowedDMs.includes('*') && !config.allowedDMs.includes(chatId)) {
+        console.log(`[Security] Blocked DM from ${sender || chatId} (not in allowlist)`)
         return false
       }
     }

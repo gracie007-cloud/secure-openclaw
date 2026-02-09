@@ -1,35 +1,37 @@
+const parseList = (env) => env ? env.split(',').map(s => s.trim()).filter(Boolean) : []
+
 export default {
   agentId: 'clawd',
 
   whatsapp: {
     enabled: true,
-    allowedDMs: ['*'],  // fromMe check handles filtering
-    allowedGroups: [],           // group JIDs like '1234567890-1234567890@g.us'
-    respondToMentionsOnly: true  // for groups, only respond when mentioned
+    allowedDMs: parseList(process.env.WHATSAPP_ALLOWED_DMS),       // phone numbers, or '*' for all
+    allowedGroups: parseList(process.env.WHATSAPP_ALLOWED_GROUPS),  // group JIDs
+    respondToMentionsOnly: true
   },
 
   imessage: {
-    enabled: false,              // Set to true after signing into Messages.app
-    allowedDMs: ['*'],           // '*' allows all, or specific chat IDs
-    allowedGroups: [],           // group chat IDs
-    respondToMentionsOnly: true  // for groups, only respond when mentioned
+    enabled: false,
+    allowedDMs: parseList(process.env.IMESSAGE_ALLOWED_DMS),       // chat IDs, or '*' for all
+    allowedGroups: parseList(process.env.IMESSAGE_ALLOWED_GROUPS),
+    respondToMentionsOnly: true
   },
 
   telegram: {
-    enabled: false,              // Set to true and add bot token
-    token: '',                   // Get from @BotFather on Telegram
-    allowedDMs: ['*'],           // '*' allows all, or specific user IDs
-    allowedGroups: [],           // group chat IDs
-    respondToMentionsOnly: true  // for groups, only respond when @mentioned
+    enabled: false,
+    token: process.env.TELEGRAM_BOT_TOKEN || '',
+    allowedDMs: parseList(process.env.TELEGRAM_ALLOWED_DMS),       // user IDs, or '*' for all
+    allowedGroups: parseList(process.env.TELEGRAM_ALLOWED_GROUPS),
+    respondToMentionsOnly: true
   },
 
   signal: {
-    enabled: false,              // Set to true after setting up signal-cli
-    phoneNumber: '',             // Your Signal phone number with country code (+1234567890)
-    signalCliPath: 'signal-cli', // Path to signal-cli binary
-    allowedDMs: ['*'],           // '*' allows all, or specific phone numbers
-    allowedGroups: [],           // group IDs
-    respondToMentionsOnly: true  // for groups, only respond when mentioned
+    enabled: false,
+    phoneNumber: process.env.SIGNAL_PHONE_NUMBER || '',
+    signalCliPath: 'signal-cli',
+    allowedDMs: parseList(process.env.SIGNAL_ALLOWED_DMS),         // phone numbers, or '*' for all
+    allowedGroups: parseList(process.env.SIGNAL_ALLOWED_GROUPS),
+    respondToMentionsOnly: true
   },
 
   // Agent configuration
@@ -39,10 +41,9 @@ export default {
     allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
     provider: 'opencode',          // 'claude' or 'opencode'
     opencode: {
-      model: 'opencode/big-pickle',
+      model: 'opencode/gpt-5-nano',
       hostname: '127.0.0.1',
-      port: 4096,
-      useExistingServer: true
+      port: 4096
     }
   },
 

@@ -12,7 +12,7 @@ export class ClaudeProvider extends BaseProvider {
       'TodoWrite', 'Skill'
     ];
     this.defaultMaxTurns = config.maxTurns || 50;
-    this.permissionMode = config.permissionMode || 'bypassPermissions';
+    this.permissionMode = config.permissionMode || 'default';
     this.abortControllers = new Map();
   }
 
@@ -22,8 +22,8 @@ export class ClaudeProvider extends BaseProvider {
 
   getAvailableModels() {
     return [
+      { id: 'claude-opus-4-6', label: 'Opus 4.6' },
       { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
-      { id: 'claude-opus-4-20250514', label: 'Opus 4' },
       { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
     ];
   }
@@ -49,6 +49,7 @@ export class ClaudeProvider extends BaseProvider {
    * @param {number} [params.maxTurns] - Maximum conversation turns
    * @param {string} [params.systemPrompt] - System prompt
    * @param {string} [params.permissionMode] - Permission mode override
+   * @param {Function} [params.canUseTool] - Permission callback for tool approval
    * @yields {Object} Normalized response chunks
    */
   async *query(params) {
@@ -59,7 +60,8 @@ export class ClaudeProvider extends BaseProvider {
       allowedTools = this.defaultAllowedTools,
       maxTurns = this.defaultMaxTurns,
       systemPrompt = null,
-      permissionMode = this.permissionMode
+      permissionMode = this.permissionMode,
+      canUseTool
     } = params;
 
     const queryOptions = {
@@ -69,6 +71,10 @@ export class ClaudeProvider extends BaseProvider {
       permissionMode,
       includePartialMessages: true
     };
+
+    if (canUseTool) {
+      queryOptions.canUseTool = canUseTool;
+    }
 
     if (this.currentModel) {
       queryOptions.model = this.currentModel;

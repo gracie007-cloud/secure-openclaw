@@ -341,6 +341,16 @@ async function terminalChat() {
       opencode: config.agent?.opencode || {}
     })
 
+    // Pre-initialize provider (connect/start server before user types)
+    if (agent.provider.initialize) {
+      try {
+        await agent.provider.initialize()
+        print('  ✅ Provider ready', colors.green)
+      } catch (err) {
+        print('  ⚠️  Provider: ' + err.message, colors.yellow)
+      }
+    }
+
     // Handle cron job executions in terminal
     agent.cronScheduler.on('execute', async ({ jobId, message, invokeAgent }) => {
       process.stdout.write('\n\n')
@@ -394,6 +404,92 @@ async function terminalChat() {
 
     const sessionKey = `terminal:${Date.now()}`
     const spinner = createSpinner('Thinking...')
+
+    // ── Pending approval resolver (set during canUseTool) ───────
+    let pendingApprovalResolve = null
+
+    /**
+     * canUseTool callback for terminal — stops spinner, prints prompt,
+     * waits for user input, then returns allow/deny.
+     */
+    const canUseTool = async (toolName, input, options) => {
+      spinner.stop()
+
+      // Handle AskUserQuestion — format as numbered options
+      if (toolName === 'AskUserQuestion') {
+        const questions = input.questions || []
+        console.log('')
+        for (const q of questions) {
+          console.log(colors.yellow + '  ? ' + colors.reset + q.question)
+          if (q.options) {
+            q.options.forEach((opt, i) => {
+              const desc = opt.description ? colors.dim + ' — ' + opt.description + colors.reset : ''
+              console.log(`    ${colors.cyan}${i + 1})${colors.reset} ${opt.label}${desc}`)
+            })
+          }
+        }
+        process.stdout.write('\n' + colors.dim + '  Your choice: ' + colors.reset)
+
+        const reply = await new Promise(resolve => {
+          pendingApprovalResolve = resolve
+        })
+        pendingApprovalResolve = null
+
+        const firstQuestion = questions[0]
+        const num = parseInt(reply.trim())
+        if (firstQuestion?.options && num >= 1 && num <= firstQuestion.options.length) {
+          const selected = firstQuestion.options[num - 1]
+          spinner.start('Thinking...')
+          return {
+            behavior: 'allow',
+            updatedInput: {
+              ...input,
+              questions: [{ ...firstQuestion, answer: selected.label }]
+            }
+          }
+        }
+
+        spinner.start('Thinking...')
+        return {
+          behavior: 'allow',
+          updatedInput: {
+            ...input,
+            questions: [{ ...firstQuestion, answer: reply.trim() }]
+          }
+        }
+      }
+
+      // Standard tool approval
+      console.log('')
+      console.log(colors.yellow + '  ⚠ Tool approval needed: ' + colors.reset + colors.bold + toolName + colors.reset)
+      if (options.decisionReason) {
+        console.log(colors.dim + '    ' + options.decisionReason + colors.reset)
+      }
+      const inputStr = JSON.stringify(input, null, 2)
+      if (inputStr.length < 500) {
+        const lines = inputStr.split('\n')
+        for (const l of lines) {
+          console.log(colors.dim + '    ' + l + colors.reset)
+        }
+      }
+      process.stdout.write('\n' + colors.dim + '  Allow? (y/n): ' + colors.reset)
+
+      const reply = await new Promise(resolve => {
+        pendingApprovalResolve = resolve
+      })
+      pendingApprovalResolve = null
+
+      const answer = reply.trim().toLowerCase()
+      if (answer === 'y' || answer === 'yes') {
+        console.log(colors.green + '  ✓ Allowed' + colors.reset)
+        spinner.start('Thinking...')
+        return { behavior: 'allow', updatedInput: input }
+      }
+
+      console.log(colors.red + '  ✗ Denied' + colors.reset)
+      spinner.start('Thinking...')
+      return { behavior: 'deny', message: reply.trim() || 'User denied the action.' }
+    }
 
     // ── Raw input mode ──────────────────────────────────────────
     rl.close() // Close readline, we'll handle input directly
@@ -495,7 +591,8 @@ async function terminalChat() {
           message: text,
           sessionKey,
           platform: 'terminal',
-          mcpServers
+          mcpServers,
+          canUseTool
         })) {
           if (chunk.type === 'tool_use') {
             spinner.stop()
@@ -514,7 +611,7 @@ async function terminalChat() {
             lastWasToolUse = true
             isFirstText = true
             curCol = 0
-          } else if (chunk.type === 'tool_result') {
+          } else if (chunk.type === 'tool_result' && lastWasToolUse) {
             spinner.stop()
             // Show result (truncated)
             const result = typeof chunk.result === 'string' ? chunk.result : JSON.stringify(chunk.result, null, 2)
@@ -530,6 +627,7 @@ async function terminalChat() {
               }
             }
             console.log(colors.dim + '  └─ ' + colors.green + 'done' + colors.reset)
+            lastWasToolUse = false
             spinner.start('Thinking...')
           } else if (chunk.type === 'text' && chunk.content) {
             spinner.stop()
@@ -538,11 +636,11 @@ async function terminalChat() {
             const termWidth = process.stdout.columns || 80
             const maxCol = termWidth - 1
 
-            // Reasoning tokens (thinking) — show dimmed
+            // Reasoning tokens (thinking) — show in red
             if (chunk.isReasoning) {
               if (isFirstThinking) {
                 console.log('')
-                console.log(colors.dim + '  Thinking:' + colors.reset)
+                console.log(colors.red + '  Thinking:' + colors.reset)
                 process.stdout.write(padStr)
                 curCol = padLen
                 isFirstThinking = false
@@ -556,7 +654,7 @@ async function terminalChat() {
                     process.stdout.write('\n' + padStr)
                     curCol = padLen
                   }
-                  process.stdout.write(colors.dim + ch + colors.reset)
+                  process.stdout.write(colors.red + ch + colors.reset)
                   curCol++
                 }
               }
@@ -621,10 +719,17 @@ async function terminalChat() {
     // Handle raw keystrokes
     let ctrlCCount = 0
     let ctrlCTimer = null
+    let approvalInputBuffer = ''
 
     stdin.on('data', (key) => {
       // Ctrl+C
       if (key === '\x03') {
+        // Cancel pending approval
+        if (pendingApprovalResolve) {
+          approvalInputBuffer = ''
+          pendingApprovalResolve('')
+          return
+        }
         // Cancel model selection
         if (pendingModelSelect) {
           pendingModelSelect('')
@@ -664,6 +769,26 @@ async function terminalChat() {
       }
 
       ctrlCCount = 0
+
+      // Approval input mode — capture text and resolve on Enter
+      if (pendingApprovalResolve) {
+        if (key === '\r' || key === '\n') {
+          process.stdout.write('\n')
+          const text = approvalInputBuffer
+          approvalInputBuffer = ''
+          pendingApprovalResolve(text)
+        } else if (key === '\x7f' || key === '\b') {
+          if (approvalInputBuffer.length > 0) {
+            approvalInputBuffer = approvalInputBuffer.slice(0, -1)
+            process.stdout.write('\b \b')
+          }
+        } else if (!key.startsWith('\x1b')) {
+          approvalInputBuffer += key
+          process.stdout.write(key)
+        }
+        return
+      }
+
       if (isRunning) return // Ignore other input while agent is running
 
       // Model selection mode — capture single digit keypress

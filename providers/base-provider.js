@@ -57,6 +57,7 @@ export class BaseProvider {
    * @param {Object} params.mcpServers - MCP server configurations
    * @param {string[]} params.allowedTools - List of allowed tool names
    * @param {number} params.maxTurns - Maximum conversation turns
+   * @param {Function} [params.canUseTool] - Permission callback for tool approval
    * @yields {Object} Streaming response chunks
    */
   async *query(params) {

@@ -34,14 +34,16 @@ You have access to a persistent memory system. Use it to remember important info
 - **memory/YYYY-MM-DD.md**: Daily notes (append-only log for each day)
 
 ### When to Write Memory
-- **Immediately write** when the user says "remember this" or similar
+- **Only when the user asks** — e.g. "remember this", "save this", "don't forget"
 - **Write to MEMORY.md** for: preferences, important decisions, recurring information, relationships, key facts
 - **Write to daily log** for: tasks completed, temporary notes, conversation context, things that happened today
 
 ### Memory Tools
 - Use \`Read\` tool to read memory files from ~/clawd/
 - Use \`Write\` or \`Edit\` tools to update memory files
+- Use \`Bash\` with \`mkdir -p ~/clawd/memory\` if the directory doesn't exist
 - Workspace path: ~/clawd/
+- All memory files should be .md (markdown)
 
 ### Memory Writing Guidelines
 1. Be concise but include enough context to be useful later
@@ -49,6 +51,7 @@ You have access to a persistent memory system. Use it to remember important info
 3. Include dates when relevant
 4. For MEMORY.md, organize by topic/category
 5. For daily logs, use timestamps
+6. Do NOT proactively use memory unless the user asks you to remember or recall something
 
 ## Current Memory Context
 ${memoryContext || 'No memory files found yet. Start building your memory!'}
@@ -204,16 +207,19 @@ export default class ClaudeAgent extends EventEmitter {
 
     // Provider setup
     this.providerName = config.provider || 'claude'
-    this.provider = getProvider(this.providerName, {
+    const providerConfig = {
       allowedTools: config.allowedTools,
       maxTurns: config.maxTurns,
       permissionMode: config.permissionMode,
-      ...(config.opencode || {})
-    })
+    }
+    if (this.providerName === 'opencode') {
+      Object.assign(providerConfig, config.opencode || {})
+    }
+    this.provider = getProvider(this.providerName, providerConfig)
 
     this.allowedTools = config.allowedTools || [
       'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
-      'TodoWrite', 'Skill'
+      'TodoWrite', 'Skill', 'AskUserQuestion'
     ]
 
     // Add cron MCP tools to allowed list
@@ -236,7 +242,7 @@ export default class ClaudeAgent extends EventEmitter {
     ]
 
     this.maxTurns = config.maxTurns || 50
-    this.permissionMode = config.permissionMode || 'bypassPermissions'
+    this.permissionMode = config.permissionMode || 'default'
 
     // Forward cron events
     this.cronScheduler.on('execute', (data) => this.emit('cron:execute', data))
@@ -310,7 +316,8 @@ export default class ClaudeAgent extends EventEmitter {
       platform = 'unknown',
       chatId = null,
       image = null,
-      mcpServers = {}
+      mcpServers = {},
+      canUseTool
     } = params
 
     const session = this.getSession(sessionKey)
@@ -351,7 +358,7 @@ export default class ClaudeAgent extends EventEmitter {
       let hasStreamedContent = false
 
       // Delegate to provider - pass prompt and all options
-      for await (const chunk of this.provider.query({
+      const queryParams = {
         prompt: this.generateMessages(message, image),
         chatId: sessionKey,
         mcpServers: allMcpServers,
@@ -359,7 +366,11 @@ export default class ClaudeAgent extends EventEmitter {
         maxTurns: this.maxTurns,
         systemPrompt,
         permissionMode: this.permissionMode
-      })) {
+      }
+      if (canUseTool) {
+        queryParams.canUseTool = canUseTool
+      }
+      for await (const chunk of this.provider.query(queryParams)) {
         // Handle streaming partial messages (token-level streaming)
         if (chunk.type === 'stream_event' && chunk.event) {
           const event = chunk.event
