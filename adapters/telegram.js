@@ -44,6 +44,15 @@ export default class TelegramAdapter extends BaseAdapter {
     console.log('[Telegram] Adapter stopped')
   }
 
+  async sendTelegramMessage(chatId, text) {
+    try {
+      await this.bot.sendMessage(chatId, text, { parse_mode: 'Markdown' })
+    } catch {
+      // Markdown parse failed — send as plain text
+      await this.bot.sendMessage(chatId, text)
+    }
+  }
+
   async sendMessage(chatId, text) {
     if (!this.bot) {
       throw new Error('Telegram not connected')
@@ -53,10 +62,10 @@ export default class TelegramAdapter extends BaseAdapter {
     if (text.length > 4096) {
       const chunks = this.splitMessage(text, 4096)
       for (const chunk of chunks) {
-        await this.bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' })
+        await this.sendTelegramMessage(chatId, chunk)
       }
     } else {
-      await this.bot.sendMessage(chatId, text, { parse_mode: 'Markdown' })
+      await this.sendTelegramMessage(chatId, text)
     }
   }
 
