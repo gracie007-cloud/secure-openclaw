@@ -1,6 +1,53 @@
-# Secure OpenClaw
+<p align="center">
+  <h1 align="center">Secure OpenClaw</h1>
+</p>
 
-A personal AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, and integrations with 500+ apps.
+<p align="center">
+  <a href="https://platform.composio.dev?utm_source=github&utm_medium=gif&utm_campaign=2101&utm_content=secure-openclaw">
+    <img src="assets/secure-openclaw.gif" alt="Secure OpenClaw Demo" width="800">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://docs.composio.dev/tool-router/overview">
+    <img src="https://img.shields.io/badge/Composio-Tool%20Router-orange" alt="Composio">
+  </a>
+  <a href="https://platform.claude.com/docs/en/agent-sdk/overview">
+    <img src="https://img.shields.io/badge/Claude-Agent%20SDK-blue" alt="Claude Agent SDK">
+  </a>
+  <a href="https://github.com/anthropics/claude-code">
+    <img src="https://img.shields.io/badge/Powered%20by-Claude%20Code-purple" alt="Claude Code">
+  </a>
+  <a href="https://x.com/composio">
+    <img src="https://img.shields.io/badge/Follow%20on-X-black?logo=x&logoColor=white" alt="Follow on X">
+  </a>
+</p>
+
+<p align="center">
+  A personal AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, and integrations with 500+ apps.
+  <br><br>
+  <a href="https://platform.composio.dev?utm_source=github&utm_medium=description&utm_campaign=2101&utm_content=secure-openclaw">
+    <b>Get your free API key to get started →</b>
+  </a>
+</p>
+
+<p align="center">
+  <i>Pst. hey, you, join our stargazers :)</i>
+  <br>
+  <a href="https://github.com/ComposioHQ/secure-openclaw">
+    <img src="https://img.shields.io/github/stars/ComposioHQ/secure-openclaw.svg?style=social&label=Star&maxAge=2592000" alt="GitHub stars">
+  </a>
+</p>
+
+<p align="center">
+  <b>Join 200,000+ developers building agents in production</b>
+  <br><br>
+  <a href="https://platform.composio.dev?utm_source=github&utm_medium=cta&utm_campaign=2101&utm_content=secure-openclaw">
+    <img src="https://img.shields.io/badge/Get%20Started-For%20Free-brightgreen?style=for-the-badge" alt="Get Started For Free">
+  </a>
+  <br><br>
+  <sub>Built with <a href="https://github.com/anthropics/claude-code">Claude Code</a> and <a href="https://composio.dev">Composio</a></sub>
+</p>
 
 ---
 
@@ -20,6 +67,9 @@ A personal AI assistant that runs on your messaging platforms. Send a message on
 - [Commands](#commands)
 - [Troubleshooting](#troubleshooting)
 - [Directory Structure](#directory-structure)
+- [Contributing](#contributing)
+- [Resources](#resources)
+- [Community](#community)
 
 ---
 
@@ -503,6 +553,39 @@ secure-openclaw/
   MEMORY.md              long-term memory
   memory/                daily logs and topic files
 ```
+
+---
+
+## Contributing
+
+We welcome contributions! Here's how to get started:
+
+1. Fork the repo
+2. Create a branch (`git checkout -b feat/my-feature`)
+3. Make your changes and commit (`git commit -m 'Add my feature'`)
+4. Push to your branch (`git push origin feat/my-feature`)
+5. Open a Pull Request
+
+Please keep PRs focused on a single change. If you're fixing a bug, include steps to reproduce. If you're adding a feature, explain the use case.
+
+---
+
+## Resources
+
+- [Claude Agent SDK Docs](https://platform.claude.com/docs/en/agent-sdk/overview)
+- [Claude Code](https://github.com/anthropics/claude-code)
+- [Composio Docs](https://docs.composio.dev)
+- [Composio Tool Router](https://docs.composio.dev/tool-router/overview)
+- [Baileys (WhatsApp)](https://github.com/WhiskeySockets/Baileys)
+
+---
+
+## Community
+
+- [Discord](https://discord.gg/composio) — ask questions, share what you've built
+- [X / Twitter](https://x.com/composio) — follow for updates
+- [GitHub Issues](https://github.com/ComposioHQ/secure-openclaw/issues) — bug reports and feature requests
+- [GitHub Discussions](https://github.com/ComposioHQ/secure-openclaw/discussions) — ideas and Q&A
 
 ---
 
