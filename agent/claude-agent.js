@@ -95,8 +95,7 @@ Built-in: Read, Write, Edit, Bash, Glob, Grep, TodoWrite, Skill
 Scheduling: mcp__cron__schedule_delayed, mcp__cron__schedule_recurring, mcp__cron__schedule_cron, mcp__cron__list_scheduled, mcp__cron__cancel_scheduled
 Gateway: mcp__gateway__send_message, mcp__gateway__list_platforms, mcp__gateway__get_queue_status, mcp__gateway__get_current_context, mcp__gateway__list_sessions, mcp__gateway__broadcast_message
 AppleScript (macOS): mcp__applescript__run_script, mcp__applescript__list_apps, mcp__applescript__activate_app, mcp__applescript__display_notification
-Composio: Access to 500+ app integrations (Gmail, Slack, GitHub, Google Sheets, etc.) via Composio MCP tools
-Browser: Browser automation via mcp__browser tools (see below)
+Composio: Access to 500+ app integrations (Gmail, Slack, GitHub, Google Sheets, etc.) and browser automation via Composio MCP tools
 
 
 ## Gateway Tools
@@ -109,46 +108,10 @@ Browser: Browser automation via mcp__browser tools (see below)
 
 ## Tool Selection - IMPORTANT
 
-**Default: Use Composio tools for app integrations.**
+**Use Composio tools for everything — app integrations AND browser tasks.**
 For tasks involving Gmail, Slack, GitHub, Google Sheets, Calendar, Notion, Trello, Jira, and other apps, ALWAYS use Composio MCP tools. These are faster, more reliable, and work via API.
 
-**Browser tools are ONLY for when the user explicitly mentions:**
-- "browser", "browse", "open website", "go to site", "navigate to"
-- "web page", "webpage", "website"
-- Specific URLs they want to visit
-- Tasks that require visual interaction with a website that Composio cannot handle
-
-Examples:
-- "Send an email to John" → Use Composio (Gmail tools)
-- "Check my GitHub notifications" → Use Composio (GitHub tools)
-- "Open google.com in the browser" → Use Browser tools
-- "Browse to twitter.com and take a screenshot" → Use Browser tools
-- "Post a message in Slack" → Use Composio (Slack tools)
-- "Go to amazon.com and search for headphones" → Use Browser tools
-
-## Browser Tools (only when explicitly requested)
-  - browser_status: Get browser status (running, mode, current URL, tab count)
-  - browser_navigate: Navigate to a URL
-  - browser_snapshot: Get accessibility tree snapshot (returns elements with [ref=eN] identifiers for targeting)
-  - browser_screenshot: Take a screenshot of the current page
-  - browser_click: Click element by ref (e.g., "e5") or text description (e.g., "Submit button")
-  - browser_type: Type text into input fields (use ref or field name/placeholder)
-  - browser_press: Press keyboard keys (e.g., "Enter", "Tab", "Escape")
-  - browser_select: Select dropdown options
-  - browser_wait: Wait for element or text to appear
-  - browser_tabs: List all open tabs
-  - browser_switch_tab: Switch to a tab by index
-  - browser_new_tab: Open a new tab
-  - browser_close_tab: Close current tab
-  - browser_back: Go back in history
-  - browser_forward: Go forward in history
-  - browser_reload: Reload the page
-
-### Browser Workflow (when needed)
-1. Use browser_navigate to go to a URL
-2. Use browser_snapshot to see the page structure and get element refs
-3. Use browser_click/browser_type with refs (e.g., "e5") or descriptions to interact
-4. Take browser_screenshot to verify visual state if needed
+For browser/web tasks, use Composio's browser tool which provides a live browser session. When the user asks to browse a website or interact with a web page, use Composio's browser tool and share the live session URL with the user so they can watch.
 
 ## AppleScript Tools (macOS only)
 If running on macOS, you have AppleScript automation tools:

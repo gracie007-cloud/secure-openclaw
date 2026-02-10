@@ -1,6 +1,6 @@
 # Secure OpenClaw
 
-A personal AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, browser automation, and integrations with 500+ apps.
+A personal AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, and integrations with 500+ apps.
 
 ---
 
@@ -14,7 +14,6 @@ A personal AI assistant that runs on your messaging platforms. Send a message on
 - [Configuration](#configuration)
 - [Messaging Platforms](#messaging-platforms)
 - [Tool Approvals](#tool-approvals)
-- [Browser Control](#browser-control)
 - [Memory System](#memory-system)
 - [Scheduling and Reminders](#scheduling-and-reminders)
 - [App Integrations](#app-integrations)
@@ -111,11 +110,10 @@ This opens the interactive menu:
 1) Terminal chat      — talk to the assistant in your terminal
 2) Start gateway      — run the messaging gateway
 3) Setup adapters     — configure WhatsApp, Telegram, etc.
-4) Configure browser  — set up browser automation
-5) Show current config
-6) Test connection
-7) Change provider
-8) Exit
+4) Show current config
+5) Test connection
+6) Change provider
+7) Exit
 ```
 
 Or run directly:
@@ -225,7 +223,6 @@ Any Linux VPS works (Hetzner, Vultr, AWS Lightsail). Same steps — SSH in, add 
 |---------|-------|--------|
 | Terminal chat | Yes | No |
 | Gateway (WhatsApp, Telegram, etc.) | Yes | Yes |
-| Browser automation | Yes | Headless only |
 | Memory | Yes | Yes (needs volume) |
 | Cron/reminders | Yes | Yes |
 | Composio integrations | Yes | Yes |
@@ -279,11 +276,6 @@ All settings live in `config.js`. Edit directly or use the setup wizard.
     }
   },
 
-  browser: {
-    enabled: true,
-    mode: 'secure-openclaw',
-    ...
-  }
 }
 ```
 
@@ -371,42 +363,6 @@ The gateway runs with permission mode `default`, which means the assistant asks 
 If the assistant uses `AskUserQuestion` to ask clarifying questions, these are formatted as numbered options. Reply with a number or type your answer.
 
 Approvals time out after 2 minutes with no response.
-
----
-
-## Browser Control
-
-Two modes for browser automation.
-
-### Secure-OpenClaw Mode (Isolated Browser)
-
-Launches a dedicated Chromium instance with its own profile. Clean slate, no existing logins.
-
-Setup: run the CLI, select "Configure browser", choose "secure-openclaw". Install Playwright Chromium when prompted.
-
-### Chrome Mode (Your Existing Browser)
-
-Connects to your running Chrome via CDP. Keeps your logged-in sessions.
-
-Start Chrome with remote debugging:
-
-```bash
-# macOS
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-
-# Linux
-google-chrome --remote-debugging-port=9222
-```
-
-Then start the gateway. It connects to your Chrome.
-
-Security note: this gives the assistant access to all your open tabs and sessions.
-
-### Available Browser Tools
-
-`browser_navigate`, `browser_snapshot`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_press`, `browser_tabs`, `browser_switch_tab`, `browser_new_tab`, `browser_close_tab`, `browser_back`, `browser_forward`, `browser_reload`
-
-The assistant prefers Composio tools for app tasks (email, Slack, GitHub). Browser tools are only used when you explicitly ask to browse a website.
 
 ---
 
@@ -499,10 +455,6 @@ node cli.js help         # help
 
 **WhatsApp QR not appearing** — delete `auth_whatsapp/` and restart.
 
-**Browser not starting (secure-openclaw mode)** — run `npx playwright install chromium`.
-
-**Browser not connecting (chrome mode)** — make sure Chrome is running with `--remote-debugging-port=9222` before starting the gateway.
-
 **Telegram bot not responding** — verify the token, make sure you sent `/start` to your bot, check `enabled: true`.
 
 **Signal not working** — verify signal-cli is installed, phone number is registered and includes country code.
@@ -511,7 +463,7 @@ node cli.js help         # help
 
 **Opencode server failing** — if port 4096 is already in use from a previous run, kill the old process: `kill $(lsof -ti :4096)`. The provider auto-detects running servers, so usually this resolves itself.
 
-**Memory not persisting on remote** — make sure you have a persistent volume mounted at `/root/secure-openclaw`.
+**Memory not persisting on remote** — make sure you have a persistent volume mounted at `/home/claw/secure-openclaw`.
 
 ---
 
@@ -537,9 +489,6 @@ secure-openclaw/
     claude-provider.js   Claude Agent SDK provider
     opencode-provider.js Opencode provider
     index.js             provider registry
-  browser/
-    server.js            browser automation server
-    mcp.js               browser MCP tools
   memory/
     manager.js           memory file management
   tools/

@@ -27,7 +27,6 @@ RUN useradd -m -s /bin/bash claw && chown -R claw:claw /app
 # Set up paths and workspace for the non-root user
 ENV PATH="/home/claw/.opencode/bin:/home/claw/.local/bin:${PATH}"
 ENV HOME=/home/claw
-ENV BROWSER_HEADLESS=true
 
 # Move opencode CLI to the new user's path
 RUN cp -r /root/.opencode /home/claw/.opencode 2>/dev/null || true && \

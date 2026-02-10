@@ -62,15 +62,16 @@ export default class WhatsAppAdapter extends BaseAdapter {
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
         console.log(`[WhatsApp] Connection closed. Status: ${statusCode}`)
 
-        if (shouldReconnect) {
+        if (statusCode === DisconnectReason.loggedOut) {
+          console.log('[WhatsApp] Logged out. Please delete auth folder and restart.')
+        } else if (this.myJid) {
           console.log('[WhatsApp] Reconnecting...')
           this.start()
         } else {
-          console.log('[WhatsApp] Logged out. Please delete auth folder and restart.')
+          console.log('[WhatsApp] QR code expired. Restart to try again.')
         }
       }
 

@@ -10,7 +10,6 @@ import SessionManager from './sessions/manager.js'
 import AgentRunner from './agent/runner.js'
 import CommandHandler from './commands/handler.js'
 import { Composio } from '@composio/core'
-import { BrowserServer, createBrowserMcpServer } from './browser/index.js'
 
 /**
  * Secure OpenClaw Gateway - Routes messages between messaging platforms and Claude agent
@@ -30,7 +29,6 @@ class Gateway {
     this.pendingApprovals = new Map() // chatId -> { resolve, timeout }
     this.composio = new Composio()
     this.composioSession = null
-    this.browserServer = null
     this.mcpServers = {}
     this.setupQueueMonitoring()
     this.setupAgentMonitoring()
@@ -50,21 +48,6 @@ class Gateway {
       console.log('[Composio] Session ready')
     } catch (err) {
       console.error('[Composio] Failed to initialize:', err.message)
-    }
-
-    if (config.browser?.enabled) {
-      console.log('[Browser] Mode:', config.browser.mode || 'secure-openclaw')
-
-      try {
-        this.browserServer = new BrowserServer(config.browser)
-        this.mcpServers.browser = createBrowserMcpServer(this.browserServer)
-        console.log('[Browser] Ready')
-      } catch (err) {
-        console.error('[Browser] Failed to initialize:', err.message)
-        if (config.browser.mode === 'chrome') {
-          console.error('[Browser] Make sure Chrome is running with --remote-debugging-port=' + (config.browser.chrome?.cdpPort || 9222))
-        }
-      }
     }
 
   }
@@ -263,7 +246,7 @@ class Gateway {
 
     console.log('')
     console.log('[Gateway] Ready and listening for messages')
-    console.log('[Gateway] Using Claude Agent SDK with memory + cron + Composio + Browser')
+    console.log('[Gateway] Using Claude Agent SDK with memory + cron + Composio')
     console.log('[Gateway] Commands: /help, /new, /status, /memory, /stop')
   }
 
@@ -402,16 +385,6 @@ class Gateway {
 
     // Stop cron scheduler
     this.agentRunner.agent.stopCron()
-
-    // Stop browser server
-    if (this.browserServer) {
-      try {
-        await this.browserServer.stop()
-        console.log('[Gateway] Browser server stopped')
-      } catch (err) {
-        console.error('[Gateway] Error stopping browser:', err.message)
-      }
-    }
 
     for (const adapter of this.adapters.values()) {
       try {

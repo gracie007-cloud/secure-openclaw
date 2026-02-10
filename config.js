@@ -45,17 +45,5 @@ export default {
       hostname: '127.0.0.1',
       port: 4097
     }
-  },
-
-  browser: {
-    enabled: true,
-    mode: 'secure-openclaw',
-    'secure-openclaw': {
-      userDataDir: '~/.secure-openclaw-browser-profile',
-      headless: process.env.BROWSER_HEADLESS === 'true'
-    },
-    chrome: {
-      profilePath: '',
-      cdpPort: 9222
-    }
-  }}
+  }
+}

@@ -2,7 +2,7 @@
 
 import 'dotenv/config'
 import { createInterface } from 'readline'
-import { existsSync, readFileSync, writeFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import { execSync } from 'child_process'
@@ -89,18 +89,17 @@ async function mainMenu() {
     [colors.red, '  1) Terminal chat'],
     [colors.green, '  2) Start gateway'],
     [colors.blue, '  3) Setup adapters'],
-    [colors.cyan, '  4) Configure browser'],
-    [colors.yellow, '  5) Show current config'],
-    [colors.cyan, '  6) Test connection'],
-    [colors.green, '  7) Change provider'],
-    [colors.dim, '  8) Exit\n'],
+    [colors.yellow, '  4) Show current config'],
+    [colors.cyan, '  5) Test connection'],
+    [colors.green, '  6) Change provider'],
+    [colors.dim, '  7) Exit\n'],
   ]
   for (const [color, text] of menuLines) {
     print(text, color)
     await sleep(60)
   }
 
-  const choice = await prompt('Enter choice (1-8): ')
+  const choice = await prompt('Enter choice (1-7): ')
 
   switch (choice.trim()) {
     case '1':
@@ -113,19 +112,16 @@ async function mainMenu() {
       await setupWizard()
       break
     case '4':
-      await browserSetup()
-      break
-    case '5':
       showConfig()
       await mainMenu()
       break
-    case '6':
+    case '5':
       await testConnection()
       break
-    case '7':
+    case '6':
       await changeProvider()
       break
-    case '8':
+    case '7':
       print('\nGoodbye!\n', colors.red)
       rl.close()
       process.exit(0)
@@ -312,21 +308,6 @@ async function terminalChat() {
       print('  ✅ Composio ready', colors.green)
     } catch (err) {
       print('  ⚠️  Composio: ' + err.message, colors.yellow)
-    }
-
-    let browserServer = null
-    if (config.browser?.enabled) {
-      try {
-        const { BrowserServer, createBrowserMcpServer } = await import('./browser/index.js')
-        browserServer = new BrowserServer(config.browser)
-        mcpServers.browser = createBrowserMcpServer(browserServer)
-        print(`  ✅ Browser ready`, colors.green)
-      } catch (err) {
-        print('  ⚠️  Browser: ' + err.message, colors.yellow)
-        if (config.browser.mode === 'chrome') {
-          print('     Start Chrome with: --remote-debugging-port=' + (config.browser.chrome?.cdpPort || 9222), colors.dim)
-        }
-      }
     }
 
     // Create agent with selected provider
@@ -559,10 +540,6 @@ async function terminalChat() {
         stdin.pause()
         print('\n\nGoodbye!\n', colors.red)
         agent.stopCron()
-        if (browserServer) {
-          print('Closing browser...', colors.dim)
-          await browserServer.stop()
-        }
         process.exit(0)
       }
 
@@ -1102,176 +1079,6 @@ async function setupiMessage() {
   } else {
     await updateConfig('imessage', { enabled: false })
     print('\n❌ iMessage disabled.\n', colors.dim)
-  }
-}
-
-async function browserSetup() {
-  print('\n🌐 Browser Configuration\n', colors.cyan + colors.bold)
-  print('━'.repeat(40), colors.dim)
-  print('')
-  print('Select browser mode:\n')
-  print('  1) secure-openclaw - Managed browser (isolated profile)', colors.green)
-  print('     A dedicated Chromium instance with its own profile')
-  print('     Best for: Clean slate, no existing logins\n')
-  print('  2) chrome - Control your Chrome (keeps logins)', colors.blue)
-  print('     Connect to your existing Chrome browser via CDP')
-  print('     Best for: Using existing logged-in sessions\n')
-  print('  3) Disable browser', colors.dim)
-  print('  4) Back to main menu\n', colors.dim)
-
-  const choice = await prompt('Enter choice (1-4): ')
-
-  switch (choice.trim()) {
-    case '1':
-      await setupManagedBrowser()
-      break
-    case '2':
-      await setupChromeBrowser()
-      break
-    case '3':
-      await updateBrowserConfig({ enabled: false })
-      print('\n❌ Browser disabled.\n', colors.dim)
-      await mainMenu()
-      return
-    case '4':
-      await mainMenu()
-      return
-    default:
-      print('\nInvalid choice.\n', colors.red)
-      await browserSetup()
-      return
-  }
-
-  await mainMenu()
-}
-
-async function setupManagedBrowser() {
-  print('\n🔷 Secure OpenClaw Browser Setup\n', colors.green)
-  print('This launches an isolated Chromium browser with a dedicated profile.')
-  print('Your browsing data will be stored separately from your main browser.\n')
-
-  // Check if Playwright browsers are installed by looking for the chromium directory
-  print('Checking for Playwright Chromium...', colors.dim)
-  const homeDir = process.env.HOME || process.env.USERPROFILE
-  const playwrightCacheDir = path.join(homeDir, 'Library', 'Caches', 'ms-playwright')
-  const chromiumInstalled = existsSync(playwrightCacheDir) &&
-    readdirSync(playwrightCacheDir).some(d => d.startsWith('chromium'))
-
-  if (!chromiumInstalled) {
-    print('  ⚠️  Chromium browser not installed\n', colors.yellow)
-    const install = await prompt('Install Playwright Chromium now? This is required. (y/n): ')
-    if (install.toLowerCase() === 'y') {
-      print('\nInstalling Chromium (this may take a minute)...', colors.cyan)
-      try {
-        execSync('npx playwright install chromium', { stdio: 'inherit' })
-        print('\n✅ Chromium installed successfully!\n', colors.green)
-      } catch (installErr) {
-        print('\n❌ Failed to install Chromium: ' + installErr.message, colors.red)
-        print('You can install manually with: npx playwright install chromium\n', colors.yellow)
-        return
-      }
-    } else {
-      print('\n⚠️  Browser setup cancelled. Chromium is required for secure-openclaw mode.', colors.yellow)
-      print('   Install with: npx playwright install chromium\n', colors.cyan)
-      return
-    }
-  } else {
-    print('  ✅ Chromium found\n', colors.green)
-  }
-
-  const customPath = await prompt('Custom profile path (press Enter for default ~/.secure-openclaw-browser-profile): ')
-  const headlessChoice = await prompt('Run headless (no visible window)? (y/n, default: n): ')
-
-  const userDataDir = customPath.trim() || '~/.secure-openclaw-browser-profile'
-  const headless = headlessChoice.toLowerCase() === 'y'
-
-  await updateBrowserConfig({
-    enabled: true,
-    mode: 'secure-openclaw',
-    'secure-openclaw': { userDataDir, headless }
-  })
-
-  print('\n✅ Browser configured: secure-openclaw mode', colors.green)
-  print(`   Profile: ${userDataDir}`, colors.dim)
-  print(`   Headless: ${headless}\n`, colors.dim)
-}
-
-async function setupChromeBrowser() {
-  print('\n🔷 Chrome Browser Setup\n', colors.blue)
-  print('This connects to your existing Chrome browser via CDP.')
-  print('You\'ll need to start Chrome with remote debugging enabled.\n')
-
-  // Try to find Chrome profiles
-  let profiles = []
-  try {
-    const { findChromeProfiles } = await import('./browser/server.js')
-    profiles = findChromeProfiles()
-  } catch (err) {
-    // Module not available yet, continue without profile detection
-  }
-
-  if (profiles.length > 0) {
-    print('Found Chrome profiles:\n')
-    profiles.forEach((profile, index) => {
-      const email = profile.email ? ` (${profile.email})` : ''
-      print(`  ${index + 1}) ${profile.name}${email}`, colors.cyan)
-    })
-    print('')
-
-    const profileChoice = await prompt(`Select profile (1-${profiles.length}), or press Enter to skip: `)
-    const profileIndex = parseInt(profileChoice) - 1
-
-    if (profileIndex >= 0 && profileIndex < profiles.length) {
-      const selectedProfile = profiles[profileIndex]
-      print(`\nSelected: ${selectedProfile.name}`, colors.green)
-      print(`Path: ${selectedProfile.path}\n`, colors.dim)
-    }
-  }
-
-  const cdpPort = await prompt('CDP port (press Enter for default 9222): ')
-  const port = parseInt(cdpPort) || 9222
-
-  await updateBrowserConfig({
-    enabled: true,
-    mode: 'chrome',
-    chrome: { cdpPort: port }
-  })
-
-  print('\n✅ Browser configured: chrome mode', colors.green)
-  print(`   CDP Port: ${port}\n`, colors.dim)
-  print('To use this mode, start Chrome with:', colors.yellow)
-  print(`   google-chrome --remote-debugging-port=${port}`, colors.cyan)
-  print('   or on macOS:', colors.yellow)
-  print(`   /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=${port}\n`, colors.cyan)
-}
-
-async function updateBrowserConfig(updates) {
-  try {
-    let content = readFileSync(CONFIG_PATH, 'utf-8')
-
-    // Find the browser config block and replace it
-    const browserBlockRegex = /browser:\s*\{[\s\S]*?(?=\n  \w+:|^\})/m
-
-    // Escape single quotes to prevent config injection
-    const escapeQuotes = (str) => (str || '').replace(/'/g, "\\'")
-
-    const newBrowserBlock = `browser: {
-    enabled: ${updates.enabled},
-    mode: '${escapeQuotes(updates.mode) || 'secure-openclaw'}',
-    'secure-openclaw': {
-      userDataDir: '${escapeQuotes(updates['secure-openclaw']?.userDataDir) || '~/.secure-openclaw-browser-profile'}',
-      headless: ${updates['secure-openclaw']?.headless ?? false}
-    },
-    chrome: {
-      profilePath: '${escapeQuotes(updates.chrome?.profilePath) || ''}',
-      cdpPort: ${updates.chrome?.cdpPort || 9222}
-    }
-  }`
-
-    content = content.replace(browserBlockRegex, newBrowserBlock)
-    writeFileSync(CONFIG_PATH, content)
-  } catch (err) {
-    print('Failed to update browser config: ' + err.message, colors.red)
   }
 }
 
