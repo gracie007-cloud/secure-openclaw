@@ -24,29 +24,11 @@
 </p>
 
 <p align="center">
-  A personal AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, and integrations with 500+ apps.
+  A personal 24x7 AI assistant that runs on your messaging platforms. Send a message on WhatsApp, Telegram, Signal, or iMessage and get responses from Claude with full tool access, persistent memory, scheduled reminders, and integrations with 500+ apps.
   <br><br>
   <a href="https://platform.composio.dev?utm_source=github&utm_medium=description&utm_campaign=2101&utm_content=secure-openclaw">
     <b>Get your free API key to get started →</b>
   </a>
-</p>
-
-<p align="center">
-  <i>Pst. hey, you, join our stargazers :)</i>
-  <br>
-  <a href="https://github.com/ComposioHQ/secure-openclaw">
-    <img src="https://img.shields.io/github/stars/ComposioHQ/secure-openclaw.svg?style=social&label=Star&maxAge=2592000" alt="GitHub stars">
-  </a>
-</p>
-
-<p align="center">
-  <b>Join 200,000+ developers building agents in production</b>
-  <br><br>
-  <a href="https://platform.composio.dev?utm_source=github&utm_medium=cta&utm_campaign=2101&utm_content=secure-openclaw">
-    <img src="https://img.shields.io/badge/Get%20Started-For%20Free-brightgreen?style=for-the-badge" alt="Get Started For Free">
-  </a>
-  <br><br>
-  <sub>Built with <a href="https://github.com/anthropics/claude-code">Claude Code</a> and <a href="https://composio.dev">Composio</a></sub>
 </p>
 
 ---
